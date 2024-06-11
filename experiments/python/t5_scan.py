@@ -452,7 +452,7 @@ def run():
         "lr": args.lr,
         "train_steps": args.train_steps,
         "seed": args.seed,
-        "train_batch_size": args.train_batch_size,
+        "train_batch_size": args.per_device_train_batch_size,
     }
     # run = os.path.split(__file__)[-1].split(".")[0]
     accelerator.init_trackers('runs', track_config)
