@@ -103,6 +103,9 @@ def train(args, accelerator):
         "num_beams": num_beams,
     }
 
+    # prepare with accelerator
+    model, test_dataloader = accelerator.prepare(model, test_dataloader)
+
     # test bar
     test_bar = tqdm(range(len(test_dataloader)), disable=not accelerator.is_local_main_process)
 
