@@ -2,4 +2,3 @@ transformers
 datasets
 accelerate
 evaluate
--e .

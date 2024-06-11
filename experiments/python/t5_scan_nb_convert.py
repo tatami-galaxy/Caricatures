@@ -235,8 +235,6 @@ optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=learning_rate)
 # In[30]:
 
 
-overrode_max_train_steps = False
-
 lr_scheduler = get_scheduler(
     name=lr_scheduler_type,
     optimizer=optimizer,
