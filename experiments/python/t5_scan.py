@@ -206,7 +206,6 @@ def train(args, accelerator):
             # checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
                 progress_bar.update(1)
-                global_step += 1
 
             if (global_step + 1) % args.eval_steps == 0:
                 model.eval()
