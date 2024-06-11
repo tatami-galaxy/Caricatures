@@ -37,7 +37,7 @@ def train(args, accelerator):
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_name_or_path, trust_remote_code=args.trust_remote_code)
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name_or_path, config=config)
+    model = AutoModelForSeq2SeqLM.from_pretrained(args.checkpoint, config=config)
 
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
@@ -161,6 +161,11 @@ def run():
         default='google-t5/t5-base',  # gp2, gemma
         type=str,
         help="Path to pretrained model or model identifier from huggingface.co/models",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default=None,
+        type=str,
     )
     parser.add_argument(
         "--trust_remote_code",

@@ -278,6 +278,7 @@ def train(args, accelerator):
                     unwrapped_model.config.save_pretrained(
                         output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
                     )
+                    generation_config.save_pretrained(output_dir)
 
                 model.train()
                 total_loss = 0
