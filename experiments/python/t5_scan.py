@@ -151,8 +151,8 @@ def train(args, accelerator):
     total_loss = 0  # total loss before each eval
 
     accelerator.log({
-        "train_batch_size": args.train_batch_size,
-        "eval_batch_size": args.eval_batch_size,
+        "train_batch_size": args.per_device_train_batch_size,
+        "eval_batch_size": args.per_device_eval_batch_size,
         "gpus": accelerator.state.num_processes
     },
         step=global_step + 1,
