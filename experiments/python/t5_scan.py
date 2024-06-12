@@ -396,7 +396,7 @@ def run():
     )
     parser.add_argument(
         "--eval_steps",
-        default=4000,
+        default=5000,
         type=int,
     )
     parser.add_argument(
