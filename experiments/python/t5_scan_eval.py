@@ -27,15 +27,15 @@ def train(args, accelerator):
 
     # get dataset
     raw_datasets = load_dataset(
-        args.dataset, args.dataset_config, trust_remote_code=args.trust_remote_code)
+        args.dataset, args.dataset_config, trust_remote_code=True)
 
     # load pretrained model or initialize from scratch. Load tokenizer
     config = AutoConfig.from_pretrained(
-        args.model_name_or_path, trust_remote_code=args.trust_remote_code)
+        args.model_name_or_path, trust_remote_code=True)
     generation_config = GenerationConfig.from_pretrained(
         args.model_name_or_path)
     tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name_or_path, trust_remote_code=args.trust_remote_code)
+        args.model_name_or_path, trust_remote_code=True)
 
     model = AutoModelForSeq2SeqLM.from_pretrained(args.checkpoint, config=config)
 
@@ -67,7 +67,7 @@ def train(args, accelerator):
 
         # if we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
         # padding in the loss.
-        if args.padding == "max_length" and args.ignore_pad_token_for_loss:
+        if args.padding == "max_length":
             labels["input_ids"] = [
                 [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
             ]
@@ -86,7 +86,7 @@ def train(args, accelerator):
         )
 
     # data collator
-    label_pad_token_id = -100 if args.ignore_pad_token_for_loss else tokenizer.pad_token_id
+    label_pad_token_id = -100
     data_collator = DataCollatorForSeq2Seq(
         tokenizer,
         model=model,
@@ -133,9 +133,9 @@ def train(args, accelerator):
         generated_tokens = generated_tokens.cpu().numpy()
         labels = labels.cpu().numpy()
 
-        if args.ignore_pad_token_for_loss:
-            # replace -100 in the labels as we can't decode them.
-            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        # replace -100 in the labels as we can't decode them.
+        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+
         if isinstance(generated_tokens, tuple):
             generated_tokens = generated_tokens[0]
         decoded_preds = tokenizer.batch_decode(
@@ -171,19 +171,11 @@ def run():
         type=str,
     )
     parser.add_argument(
-        "--trust_remote_code",
-        action="store_true",
-    )
-    parser.add_argument(
         "--overwrite_cache",
         action="store_true",
     )
     parser.add_argument(
         "--padding",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--ignore_pad_token_for_loss",
         action="store_true",
     )
     parser.add_argument(
