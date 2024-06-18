@@ -16,5 +16,5 @@ from-scratch : 60k steps, accuracy : 0.00510204081632653 (eval accuracy : 0.9782
 ##### flan-t5-base
 pre-trained : 70k steps, accuracy : 0.13877551020408163 (eval accuracy : 0.9917598587404356)
 
-##### flan-t5-large
+##### flan-t5-large (batch size 8, base models -> batch size 16)
 pre-trained :  steps, accuracy :  (eval accuracy : )
