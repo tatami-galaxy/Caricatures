@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 import evaluate
 
 from transformers import (
-    AutoConfig, AutoTokenizer, AutoModelForSeq2SeqLM, GenerationConfig,
+    T5Config, T5Tokenizer, GenerationConfig,
     DataCollatorForSeq2Seq, get_scheduler, T5ForConditionalGeneration,
 )
 
@@ -30,19 +30,19 @@ def train(args, accelerator):
 
 
     # split train set into train and validation
-    train_val_split = raw_datasets['train'].train_test_split(test_size=0.1, seed=args.seed)
+    train_val_split = raw_datasets['train'].train_test_split(test_size=args.validation_split, seed=args.seed)
     raw_datasets['train'] = train_val_split['train']
     raw_datasets['validation'] = train_val_split['test']
 
 
     # load pretrained model or initialize from scratch. Load tokenizer
-    config = AutoConfig.from_pretrained(args.model_name_or_path, trust_remote_code=True)
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
+    config = T5Config.from_pretrained(args.model_name_or_path, trust_remote_code=True)
+    tokenizer = T5Tokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
 
     if args.from_scratch:
         model = T5ForConditionalGeneration(config=config)
     else:
-        model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name_or_path, config=config, trust_remote_code=True)
+        model = T5ForConditionalGeneration.from_pretrained(args.model_name_or_path, config=config, trust_remote_code=True)
 
     generation_config = GenerationConfig.from_pretrained(args.model_name_or_path)
 
@@ -324,6 +324,12 @@ def run():
         type=str,
     )
     parser.add_argument(
+        "--validation_split",
+        type=float,
+        default=0.1,
+        help="The percentage of the train set used as validation set in case there's no validation split",
+    )
+    parser.add_argument(
         "--source_prefix",
         default="",
         type=str,
@@ -340,7 +346,7 @@ def run():
     )
     parser.add_argument(
         "--output_dir",
-        default='/users/ujan/caricatures/models/scan_t5_base/',
+        default='/users/ujan/caricatures/models/scan_t5-base/',
         type=str,
         help="The output directory where the model checkpoints and predictions will be written.",
     )
@@ -397,7 +403,7 @@ def run():
     )
     parser.add_argument(
         "--lr",
-        default=5e-5,
+        default=5e-5,   # 1e-3, smaller rate for from_scrtatch
         type=float,
     )
     parser.add_argument(
@@ -412,7 +418,7 @@ def run():
         type=str,
     )
     parser.add_argument(
-        "--mixed_precision",
+        "--mixed_precision", # choose from no, fp16, bf16 or fp8
         default='fp16',
         type=str,
     )
