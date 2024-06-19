@@ -20,10 +20,10 @@ from transformers import (
 
 from datasets import load_dataset
 
-# torch.distributed.init_process_group(backend="nccl", timeout=datetime.timedelta(seconds=50000))
-
 
 def train(args, accelerator):
+
+    # `trust_remote_code` is to be used with Auto classes
 
     # get dataset
     raw_datasets = load_dataset(args.dataset, args.dataset_config, trust_remote_code=True)
@@ -252,7 +252,7 @@ def train(args, accelerator):
                 eval_bar.reset()
 
                 accuracy = accuracy / len(raw_datasets['validation'])
-                # add wer for hindi
+
                 accelerator.print('step : {}, accuracy : {}'.format(global_step + 1, accuracy))
                 accelerator.print('val loss : {}'.format(val_loss/len(eval_dataloader)))
                 accelerator.log({
@@ -318,6 +318,10 @@ def run():
         type=str,
         help="Dataset",
     )
+    # 'simple', 'addprim_jump', 'addprim_turn_left', 'filler_num0', 
+    # 'filler_num1', 'filler_num2', 'filler_num3', 'length', 
+    # 'template_around_right', 'template_jump_around_right', 
+    # 'template_opposite_right', 'template_right'
     parser.add_argument(
         "--dataset_config",
         default="simple",
@@ -403,7 +407,7 @@ def run():
     )
     parser.add_argument(
         "--lr",
-        default=5e-5,   # 1e-3, smaller rate for from_scrtatch
+        default=5e-5, 
         type=float,
     )
     parser.add_argument(

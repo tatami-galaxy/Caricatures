@@ -1,20 +1,22 @@
 ### SCAN
 
-#### simple
+All trained on a single RTX 4090: 
 
-##### t5-base
-pre-trained : 18k steps, accuracy: 0.9791965566714491
-from-scratch : 150k steps, accuracy : 0.9873266379722621
+| Split | Model | Pre-Trained | Steps | Batch Size | Learning Rate | Eval Accuracy ☨ | Test Accuracy ☨ |
+| ------- | ------- | ------ | -------- | -------- | --------- | ------ | ----- |
+| simple | t5-base | Yes | 18k | 16 | 5e-5 | - | 0.979 |
+| simple | t5-base | No | 18k | 16 | 5e-5 | - | 0.987 |
 
+| Split | Model | Pre-Trained | Steps | Batch Size | Learning Rate | Eval Accuracy ☨ | Test Accuracy ☨ |
+| ------- | ------- | ------ | -------- | -------- | --------- | ------ | ----- |
+| length | t5-base | Yes | 25k | 16 | 5e-5 | 0.973 | 0.125 |
+| length | t5-base | No | 60k | 16 | 1e-3 | 0.978 | 0.005 |
+| length | flan-t5-base | Yes | 70k | 16 | 5e-5 | 0.991 | 0.138 |
+| length | flan-t5-large | Yes | 75k | 8 | 5e-5 | 0.995 | 0.136 |
 
-#### length
+| Split | Model | Pre-Trained | Steps | Batch Size | Learning Rate | Eval Accuracy ☨ | Test Accuracy ☨ |
+| ------- | ------- | ------ | -------- | -------- | --------- | ------ | ----- |
+| addprim_jump | t5-base | Yes | 50k | 16 | 5e-5 | 0.993 | 0.922 |
+| addprim_jump | t5-base | No | - | 16 | 5e-5 | - | - |
+| addprim_turn_left | t5-base | Yes | - | 16 | 5e-5 | - | - |
 
-##### t5-base
-pre-trained : 25k steps, accuracy : 0.12551020408163266 (eval accuracy : 0.9735138316656857)
-from-scratch : 60k steps, accuracy : 0.00510204081632653 (eval accuracy : 0.9782224838140082)
-
-##### flan-t5-base
-pre-trained : 70k steps, accuracy : 0.13877551020408163 (eval accuracy : 0.9917598587404356)
-
-##### flan-t5-large (batch size 8, base models -> batch size 16)
-pre-trained :  steps, accuracy :  (eval accuracy : )
