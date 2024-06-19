@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 import evaluate
 
 from transformers import (
-    GemmaConfig, GemmaTokenizer, default_data_collator, 
+    GemmaConfig, GemmaTokenizer, DataCollatorWithPadding, 
     get_scheduler, GemmaForCausalLM,
 )
 
@@ -36,21 +36,126 @@ def train(args, accelerator):
 
     # load pretrained model or initialize from scratch. Load tokenizer
     config = GemmaConfig.from_pretrained(args.model_name_or_path)
-    tokenizer = GemmaTokenizer.from_pretrained(args.model_name_or_path)
-
-    #print(raw_datasets['train'][0])
-    ex = raw_datasets['train'][0]
-    input_ids = tokenizer(ex['commands'], ex['actions'])['input_ids']
-    print(tokenizer.decode(input_ids))
-    quit()
-
-
+    tokenizer = GemmaTokenizer.from_pretrained(args.model_name_or_path, pad_token="<pad>")
     model = GemmaForCausalLM.from_pretrained(args.model_name_or_path, config=config)
 
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
+
+    # preprocess dataset
+    column_names = raw_datasets["train"].column_names
+    input_column = column_names[0]
+    output_column = column_names[1]
+
+
+    def preprocess_function(examples):
+        # commands, actions
+        inputs = examples[input_column]
+        targets = examples[output_column]
+
+        # tokenize as single sequence separated by special token (<bos>)
+        # padding = False by default
+        model_inputs = tokenizer(inputs, targets, max_length=args.max_source_length, padding='max_length', truncation=True)
+        # labels same as inputs. labels shifted right in the model internally
+        model_inputs['labels'] = model_inputs['input_ids'].copy()
+
+        return model_inputs
+
+
+    with accelerator.main_process_first():
+        train_dataset = raw_datasets["train"].map(
+            preprocess_function,
+            batched=True,
+            #batch_size=4,
+            num_proc=args.num_workers,  # set as 1 for testing
+            remove_columns=column_names,
+            load_from_cache_file=not args.overwrite_cache,
+            desc="Running tokenizer on dataset",
+        )
+        eval_dataset = raw_datasets["validation"].map(
+            preprocess_function,
+            batched=True,
+            num_proc=args.num_workers,
+            remove_columns=column_names,
+            load_from_cache_file=not args.overwrite_cache,
+            desc="Running tokenizer on dataset",
+        )
+
+    # data collator and loaders
+    data_collator = DataCollatorWithPadding(tokenizer)
+
+    train_dataloader = DataLoader(
+        train_dataset, shuffle=True, collate_fn=data_collator, batch_size=args.per_device_train_batch_size
+    )
+    eval_dataloader = DataLoader(
+        eval_dataset, collate_fn=data_collator, batch_size=args.per_device_eval_batch_size
+    )
+
+    # prepare optimizer and schedule (linear warmup and decay)
+    no_decay = ["bias", "LayerNorm.weight"]
+    optimizer_grouped_parameters = [
+        {
+            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "weight_decay": args.weight_decay,
+        },
+        {
+            "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+            "weight_decay": 0.0,
+        },
+    ]
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
+
+    # scheduler
+    lr_scheduler = get_scheduler(
+        name=args.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=args.warmup_steps * accelerator.num_processes,
+        num_training_steps=args.train_steps * accelerator.num_processes,
+    )
+
+    # prepare everything for accelerator
+    model, optimizer, train_dataloader, eval_dataloader, lr_scheduler = accelerator.prepare(
+        model, optimizer, train_dataloader, eval_dataloader, lr_scheduler
+    )
+
+    global_step = 0  # tracks total steps
+    total_loss = 0  # total loss before each eval
+
+    accelerator.log({
+        "train_batch_size": args.per_device_train_batch_size,
+        "eval_batch_size": args.per_device_eval_batch_size,
+        "gpus": accelerator.state.num_processes
+    },
+        step=global_step + 1,
+    )
+
+    # load from checkpoint
+    ## loading checkpoint changing CER. val loss behaviour same. not sure why. ##
+    # check if checkpoint directory passed in
+    if args.resume_from_checkpoint is not None:
+        accelerator.print(f"resumed from checkpoint: {args.resume_from_checkpoint}")
+        accelerator.load_state(args.resume_from_checkpoint)
+        # if resumed from checkpoint
+        # we need to skip steps until we reach the current step
+        # ../checkpoint-123 -> int(123)
+        steps_completed = int(
+            args.resume_from_checkpoint.split('/')[-1].split('-')[-1])
+        global_step = steps_completed
+        if args.skip_steps:
+            train_dataloader = accelerator.skip_first_batches(
+                train_dataloader, steps_completed)  # consider dataset len
+
+
+    num_beams = args.num_beams if args.num_beams is not None else model.config.num_beams
+    gen_kwargs = {
+        "max_length": args.max_target_length,
+        "num_beams": num_beams,
+    }
+
+
+    # Training
 
 
 

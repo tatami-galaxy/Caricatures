@@ -18,5 +18,5 @@ All trained on a single RTX 4090:
 | ------- | ------- | ------ | -------- | -------- | --------- | ------ | ----- |
 | addprim_jump | t5-base | Yes | 50k | 16 | 5e-5 | 0.993 | 0.922 |
 | addprim_jump | t5-base | No | - | 16 | 5e-5 | - | - |
-| addprim_turn_left | t5-base | Yes | - | 16 | 5e-5 | - | - |
+| addprim_turn_left | t5-base | Yes | 35k | 16 | 5e-5 | 0.982 | 0.971 |
 
