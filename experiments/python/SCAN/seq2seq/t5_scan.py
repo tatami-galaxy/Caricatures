@@ -5,7 +5,6 @@ import os
 import argparse
 
 from accelerate import Accelerator
-from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 
 import torch
@@ -407,8 +406,9 @@ def run():
     )
     parser.add_argument(
         "--lr",
-        default=5e-5, 
+        default=5e-5, # 1e-5, 2e-3, 2e-5
         type=float,
+        help="Learning rate to use. From scratch training is quite sensitive to the learning rate."
     )
     parser.add_argument(
         "--weight_decay",

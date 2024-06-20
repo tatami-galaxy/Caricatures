@@ -14,7 +14,7 @@ import evaluate
 
 from transformers import (
     GemmaConfig, GemmaTokenizer, DataCollatorWithPadding, 
-    get_scheduler, GemmaForCausalLM,
+    get_scheduler, GemmaForCausalLM, GenerationConfig,
 )
 
 from datasets import load_dataset
@@ -38,6 +38,7 @@ def train(args, accelerator):
     config = GemmaConfig.from_pretrained(args.model_name_or_path)
     tokenizer = GemmaTokenizer.from_pretrained(args.model_name_or_path, pad_token="<pad>")
     model = GemmaForCausalLM.from_pretrained(args.model_name_or_path, config=config)
+    generation_config = GenerationConfig.from_pretrained(args.model_name_or_path)
 
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
@@ -156,6 +157,112 @@ def train(args, accelerator):
 
 
     # Training
+
+    # main progress bar
+    progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
+    # eval bar
+    eval_bar = tqdm(range(len(eval_dataloader)), position=1)
+
+    while True:
+
+        model.train()
+
+        for batch in train_dataloader:
+            print(batch)
+            quit()
+            with accelerator.accumulate(model):
+                outputs = model(**batch)
+                loss = outputs.loss
+                total_loss += loss.detach().float()
+                accelerator.backward(loss)
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
+
+            # checks if the accelerator has performed an optimization step behind the scenes
+            if accelerator.sync_gradients:
+                progress_bar.update(1)
+
+            if (global_step + 1) % args.eval_steps == 0:
+                model.eval()
+                accuracy = 0.0
+                val_loss = 0
+                for batch in eval_dataloader:
+                    with torch.no_grad():
+                        outputs = model(**batch)
+                        val_loss += outputs.loss.item()
+
+                    # generate and compute metric
+                    with torch.no_grad():
+                        generated_tokens = accelerator.unwrap_model(model).generate(
+                            batch["input_ids"],
+                            attention_mask=batch["attention_mask"],
+                            generation_config=generation_config,
+                            **gen_kwargs,
+                        )
+
+                        generated_tokens = accelerator.pad_across_processes(
+                            generated_tokens, dim=1, pad_index=tokenizer.pad_token_id
+                            )
+                        labels = batch["labels"]
+                        # we did not pad to max length, we need to pad the labels too
+                        labels = accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
+
+                        generated_tokens, labels = accelerator.gather_for_metrics((generated_tokens, labels))
+                        generated_tokens = generated_tokens.cpu().numpy()
+                        labels = labels.cpu().numpy()
+
+                        # replace -100 in the labels as we can't decode them.
+                        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+
+                        if isinstance(generated_tokens, tuple):
+                            generated_tokens = generated_tokens[0]
+                        decoded_preds = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+                        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+
+                        accuracy += sum([decoded_preds[i] == decoded_labels[i] for i in range(len(decoded_preds))])
+
+                    eval_bar.update(1)
+
+                eval_bar.refresh()
+                eval_bar.reset()
+
+                accuracy = accuracy / len(raw_datasets['validation'])
+
+                accelerator.print('step : {}, accuracy : {}'.format(global_step + 1, accuracy))
+                accelerator.print('val loss : {}'.format(val_loss/len(eval_dataloader)))
+                accelerator.log({
+                    "accuracy": accuracy,
+                    "train_loss": total_loss / (args.eval_steps * accelerator.state.num_processes * args.per_device_train_batch_size),
+                    "val_loss": val_loss / len(eval_dataloader)
+                },
+                    step=global_step + 1,
+                )
+
+                # save the model, optimizer, lr_scheduler, and seed states by calling `save_state`
+                # saved to folders named `checkpoint-{global_step}`
+                # will contain files: "pytorch_model.bin", "optimizer.bin", "scheduler.bin", and "random_states.pkl"
+                # if mixed precision was used, will also save a "scalar.bin" file
+                output_dir = f"checkpoint-{global_step + 1}"
+                if args.output_dir is not None:
+                    output_dir = os.path.join(args.output_dir, output_dir)
+                    accelerator.save_state(output_dir)
+                    # save config
+                    accelerator.wait_for_everyone()
+                    unwrapped_model = accelerator.unwrap_model(model)
+                    # model.config.save_pretrained(output_dir)
+                    unwrapped_model.config.save_pretrained(
+                        output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
+                    )
+                    generation_config.save_pretrained(output_dir)
+
+                model.train()
+                total_loss = 0
+
+            global_step += 1
+
+            if global_step >= args.train_steps:
+                return
 
 
 
