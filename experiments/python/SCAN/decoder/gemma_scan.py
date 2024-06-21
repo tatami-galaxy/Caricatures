@@ -168,8 +168,6 @@ def train(args, accelerator):
         model.train()
 
         for batch in train_dataloader:
-            print(batch)
-            quit()
             with accelerator.accumulate(model):
                 outputs = model(**batch)
                 loss = outputs.loss

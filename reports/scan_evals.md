@@ -21,5 +21,5 @@ All trained on a single RTX 4090 for 100k steps (need to account for batch size)
 | addprim_jump | t5-base | Yes | 50k | 16 | 5e-5 | 0.993 | 0.922 |
 | addprim_jump | t5-base | No | 90k | 16 | 1e-5 | 0.994 | 0.001 |
 | addprim_turn_left | t5-base | Yes | 35k | 16 | 5e-5 | 0.982 | 0.971 |
-| addprim_turn_left | t5-base | No | - | 16 | 1e-5 | - | - |
+| addprim_turn_left | t5-base | No | 100k | 16 | 1e-5 | 0.992 | 0.858 |
 

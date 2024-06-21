@@ -117,6 +117,7 @@ def train(args, accelerator):
             generated_tokens = accelerator.unwrap_model(model).generate(
                 batch["input_ids"],
                 attention_mask=batch["attention_mask"],
+                generation_config=generation_config,
                 **gen_kwargs,
             )
 
