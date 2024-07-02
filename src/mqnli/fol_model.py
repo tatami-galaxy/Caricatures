@@ -21,6 +21,7 @@ def get_label(premise, hypothesis):
         return "contradiction"
     return "neutral"
 
+
 def build_simple_file(name):
     #This function builds a dictionary with encoded simple sentence NLI inputs
     #as keys and the correct label as values and saves it with filename name
@@ -85,14 +86,14 @@ def build_simple_file(name):
                                     hadv_word = adverb2
                                 for pnegation_value in range(2):
                                     for hnegation_value in range(2):
+
+                                        print(subject_noun, verb, object_noun, pnegation_value, padv_word, padj1_word, padj2_word, pd1,pd2)
+
                                         sentences.append(
                                         [sentence(subject_noun, verb, object_noun, pnegation_value, padv_word, padj1_word, padj2_word, pd1,pd2),
                                         sentence(subject_noun, verb, object_noun, hnegation_value, hadv_word, hadj1_word, hadj2_word, hd1,hd2 )])
-
-                                        print(sentence)
-                                        quit()
-
                                         encodings.append([pnegation_value, pd1_index,pd2_index, hnegation_value, hd1_index, hd2_index, subject_adjective_index, object_adjective_index, adverb_index])
+                                        
     labels = Parallel(n_jobs=-1,backend="multiprocessing")(map(delayed(parallel_labels), sentences))
     result = dict()
     for i in range(len(labels)):
@@ -108,7 +109,8 @@ def build_simple_file(name):
 
 
 def parallel_labels(x):
-    #a function to format getting labels for parallel processing
+    # function to format getting labels for parallel processing
+    # x[0], x[1] -> premise, hypothesis
     label = get_label(x[0], x[1])
     return label
 
