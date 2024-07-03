@@ -1,0 +1,11 @@
+03/07/2024
+- create and clone branch locally : git clone --branch ruchiradhar-work https://github.com/tatami-galaxy/Caricatures
+- create environment caricaturesenv
+    - conda create --name caricaturesenv -y
+    - conda install jupyter notebook
+    - conda install ipykernel
+    - python -m ipykernel install --user --name=caricaturesenv
+    - conda install pytorch::pytorch torchvision torchaudio -c pytorch
+    - conda install --file requirements.txt
+- create requirements.yaml
+    - conda env export > requirements.yaml
