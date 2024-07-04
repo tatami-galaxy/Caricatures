@@ -4,6 +4,7 @@ from nltk.inference import *
 from nltk import Prover9
 from joblib import Parallel, delayed
 from data_util import sentence
+import git
 
 prover = Prover9()
 #prover.config_prover9(r"C:\Program Files (x86)\Prover9-Mace4\bin-win32")
@@ -87,11 +88,10 @@ def build_simple_file(name):
                                 for pnegation_value in range(2):
                                     for hnegation_value in range(2):
 
-                                        print(subject_noun, verb, object_noun, pnegation_value, padv_word, padj1_word, padj2_word, pd1,pd2)
-
                                         sentences.append(
                                         [sentence(subject_noun, verb, object_noun, pnegation_value, padv_word, padj1_word, padj2_word, pd1,pd2),
                                         sentence(subject_noun, verb, object_noun, hnegation_value, hadv_word, hadj1_word, hadj2_word, hd1,hd2 )])
+                                        
                                         encodings.append([pnegation_value, pd1_index,pd2_index, hnegation_value, hd1_index, hd2_index, subject_adjective_index, object_adjective_index, adverb_index])
                                         
     labels = Parallel(n_jobs=-1,backend="multiprocessing")(map(delayed(parallel_labels), sentences))
@@ -160,4 +160,5 @@ def build_boolean_file(name):
 
 
 if __name__ == '__main__':
+
     build_simple_file('test_file')

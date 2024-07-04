@@ -1,8 +1,8 @@
 import json
 
 class sentence:
-    #this class stores the logical representation of a sentence and generates the information necessary
-    #for both the first order logic model and the natural logic model
+    # this class stores the logical representation of a sentence and generates the information necessary
+    # for both the first order logic model and the natural logic model
     def __init__(self, subject_noun, verb, object_noun, negate, adverb, subject_adjective, object_adjective, subject_determiner, object_determiner):
         self.subject_noun = subject_noun
         self.verb = verb
@@ -30,8 +30,8 @@ class sentence:
 
 
     def initialize_natlog(self):
-        #This function decomposes "no" into negated "some" and "not every"
-        #into negated every for the natural logic model
+        # This function decomposes "no" into negated "some" and "not every"
+        # into negated every for the natural logic model
         if self.subject_determiner == "no":
             self.natlog_subject_determiner = "some"
             self.subject_negation = True
@@ -63,7 +63,7 @@ class sentence:
 
 
     def construct_string(self,lst):
-        #turn a list of words into a single sentence string
+        # turn a list of words into a single sentence string
         result = ""
         for word in lst:
             if word != "":
@@ -72,7 +72,7 @@ class sentence:
 
 
     def construct_emptystring(self,lst):
-        #turn a list of words into a single sentence string
+        # turn a list of words into a single sentence string
         result = ""
         for word in lst:
             if word == "not every":
@@ -87,7 +87,7 @@ class sentence:
 
 
     def construct_logical_form_joint_predicates(self):
-        #construct a first order logic representation where adjectives and nouns are merged
+        # construct a first order logic representation where adjectives and nouns are merged
         # into single predicates as well as adverbs and verbs
         logical_form = ""
         subject_noun_variable= "x"
@@ -111,8 +111,8 @@ class sentence:
 
 
     def construct_logical_form_single_predicates(self):
-        #construct a first order logic representation where adjectives and nouns
-        #are seperate predicates as well as adverbs and verbs
+        # construct a first order logic representation where adjectives and nouns
+        # are seperate predicates as well as adverbs and verbs
         logical_form = ""
         subject_noun_variable= "x"
         object_noun_variable= "y"
@@ -134,8 +134,8 @@ class sentence:
 
 
     def add_quantifier(self, determiner, first_expression, second_expression, variable):
-        #takes in a determiner, two FOL expressions, and a variable and
-        #returns a quantified FOL expression according to the arguments
+        # takes in a determiner, two FOL expressions, and a variable and
+        # returns a quantified FOL expression according to the arguments
         result = ""
         if determiner == "some" or determiner == "no":
             result = "exists " + variable + " .(" + first_expression+ "&" + second_expression+ ")"
@@ -149,10 +149,10 @@ class sentence:
 
 
 def parse_compound_sentence(data, input_sentence):
-    #Takes a compound input_sentence and outputs the corresponding
-    #instance of the sentence class for the first simple sentence
-    #then the conjunction then the instance of the sentence class for
-    #the second simple sentence
+    # Takes a compound input_sentence and outputs the corresponding
+    # instance of the sentence class for the first simple sentence
+    # then the conjunction then the instance of the sentence class for
+    # the second simple sentence
     conjunction = ""
     if " then " in input_sentence:
         return [parse_simple_sentence(data, input_sentence[3:input_sentence.index(" then ")])[0],"then", parse_simple_sentence(data,input_sentence[input_sentence.index(" then ")+6:])[0]]
@@ -191,8 +191,8 @@ def verify_parse(data, subject_noun, verb, object_noun, negation, adverb, subjec
 
 
 def parse_simple_sentence(data, input_sentence):
-    #Takes a simple input_sentence and outputs the corresponding
-    #instance of the sentence class
+    # Takes a simple input_sentence and outputs the corresponding
+    # instance of the sentence class
     words = input_sentence.split()
     if words[0] == "notevery":
         subject_determiner = "not every"
@@ -248,3 +248,8 @@ def parse_sentence(data, sentence):
         return parse_compound_sentence(data, sentence)
     else:
         return parse_simple_sentence(data, sentence)
+    
+
+if __name__ == '__main__':
+
+    pass
