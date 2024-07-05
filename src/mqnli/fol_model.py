@@ -4,7 +4,6 @@ from nltk.inference import *
 from nltk import Prover9
 from joblib import Parallel, delayed
 from data_util import sentence
-import git
 
 prover = Prover9()
 #prover.config_prover9(r"C:\Program Files (x86)\Prover9-Mace4\bin-win32")
