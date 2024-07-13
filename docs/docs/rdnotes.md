@@ -1,4 +1,6 @@
 03/07/2024
+
+Done: 
 - create and clone branch locally : git clone --branch ruchiradhar-work https://github.com/tatami-galaxy/Caricatures
 - create environment caricaturesenv
     - conda create --name caricaturesenv -y
@@ -9,3 +11,18 @@
     - conda install --file requirements.txt
 - create requirements.yaml
     - conda env export > requirements.yaml
+- push changes
+    - git add .
+    - git commit -m ""
+    - git push 
+- readings: [Inner workings of a Transformer](https://levelup.gitconnected.com/understanding-transformers-from-start-to-end-a-step-by-step-math-example-16d4e64e6eb1), [Key-Value Memories]()
+
+Todo:
+- Readings: [Towards Monosemanticity](https://transformer-circuits.pub/2023/monosemantic-features), [LMs Explain Neurons](https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html)
+- Code: [TransformerLens](https://github.com/TransformerLensOrg/TransformerLens)
+
+13/07/2024
+- Check environments: conda env list
+- Created: [Pyvene Exploration Colab](https://colab.research.google.com/drive/1QZlOqEKFd334qKwzHyxCDmQywGHcCF_4#scrollTo=e08304ea)
+
+
