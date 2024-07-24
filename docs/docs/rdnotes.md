@@ -30,3 +30,6 @@ Todo:
 - Readings: [Towards Monosemanticity](https://transformer-circuits.pub/2023/monosemantic-features), [LMs Explain Neurons](https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html)
 - Code: [TransformerLens](https://github.com/TransformerLensOrg/TransformerLens)
 
+24/07/2024
+- Merge everything from main: " git fetch origin"  gets you up to date with origin and then "git merge origin/master" to finally pull from master
+- Flesh out using II followed by circuit discovery and then DAS
