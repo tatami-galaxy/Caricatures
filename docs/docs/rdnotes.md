@@ -32,4 +32,8 @@ Todo:
 
 24/07/2024
 - Merge everything from main: " git fetch origin"  gets you up to date with origin and then "git merge origin/master" to finally pull from master
-- Flesh out using II followed by circuit discovery and then DAS
+
+29/07/2024
+- Install pip in conda: !conda install pip -y
+- Install pyvene in env: pip install git+https://github.com/stanfordnlp/pyvene.git ()
+- Checked install path in python with: print(pyvene.__file__)
