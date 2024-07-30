@@ -1,0 +1,1 @@
+accelerate launch gt_gpt2.py --output_dir `default is current dir` --resume_from_checkpoint `checkpoint dir` --load_last_checkpoint

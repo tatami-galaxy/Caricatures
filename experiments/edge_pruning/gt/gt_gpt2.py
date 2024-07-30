@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import os, math
+from typing import Any, Dict, List, Optional, Union
 
 from datasets import(
     load_from_disk,
@@ -14,8 +15,10 @@ from transformers import(
     HfArgumentParser,
     AutoTokenizer,
     Seq2SeqTrainer,
+    Seq2SeqTrainingArguments,
     get_linear_schedule_with_warmup,
 )
+from transformers.trainer_utils import get_last_checkpoint
 
 from modeling_fpt2 import FPT2LMHeadModel
 
@@ -139,6 +142,9 @@ class FPT2InfoTrainer(Seq2SeqTrainer):
         digits_ = inputs.pop("digits", None)
         corr_input_ids = inputs.pop("corr_input_ids")
         input_ids = inputs.pop("input_ids")
+
+        print(inputs)
+        quit()
         
         with torch.no_grad():
             # First get the logits from the GPT-2 model
@@ -305,31 +311,22 @@ def get_optimizers(model, edges_lr, layers_lr, reg_edges_lr, reg_layers_lr, num_
 
 
 @dataclass
-class CommonArguments:
+class CustomTrainingArguments(Seq2SeqTrainingArguments):  # inherit #
 
-    seed: int = field(default=2)
-    repo_dir: str = field(default='/home/drdo/Caricatures')
-
-    def __post_init__(self):
-        pass
-
-
-@dataclass
-class TrainingArguments:  # inherit #
-
+    output_dir: str = field(default='./')
     mixed_precision: str = field(
         default="no",
         metadata={"help": "choose from : ['no', 'fp16', 'bf16', 'fp8']"}
     )
-    gradient_accumulation_steps: int = field(default=1)
     max_steps: int = field(default=3000)
     warmup_steps: int = field(default=200)
     stop_optimizing_layer_if_higher_sparsity: bool = field(default=False)
     num_sparsity_warmup_steps: int = field(default=0)
     warmup_type: str = field(default="linear")
-      
-    def __post_init__(self):
-        pass
+    load_last_checkpoint: bool = field(
+        default=False,
+        metadata={"help": "use this flag or pass in resume_from_checkpoint which overrides this flag"}
+        )
 
 
 @dataclass
@@ -348,9 +345,6 @@ class ModelArguments:
     start_layer_sparsity: float = field(default=0.0)
     target_layer_sparsity: float = field(default=0.68)
 
-    def __post_init__(self):
-        pass
-
 
 @dataclass
 class DataArguments:
@@ -365,14 +359,27 @@ class DataArguments:
         default=64,
         metadata={"help": "The maximum total input sequence length after tokenization."}
     )
-    
-    def __post_init__(self):
-        pass
 
 
-def train(common_args, training_args, model_args, data_args, accelerator):
+def train():
 
-    accelerator.print('loading dataset from {}'.format(data_args.dataset_path))
+    # parse cl arguments
+    parser = HfArgumentParser((CustomTrainingArguments, ModelArguments, DataArguments))
+    training_args, model_args, data_args = parser.parse_args_into_dataclasses()
+
+    # set seed
+    set_seed(training_args.seed)
+
+    # detecting last checkpoint.
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir) and training_args.load_last_checkpoint:
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            print(
+                f"Checkpoint detected, resuming training at {last_checkpoint}."
+            )
+
+    print('loading dataset from {}'.format(data_args.dataset_path))
     # load dataset
     raw_datasets = load_datasets(
         data_args.dataset_path,
@@ -380,10 +387,10 @@ def train(common_args, training_args, model_args, data_args, accelerator):
         data_args.max_eval_samples,
         data_args.train_split
     )
-    accelerator.print('dataset loaded')
+    print('dataset loaded')
     n_train = len(raw_datasets["train"])
 
-    accelerator.print('loading gpt2 models and tokenizer')
+    print('loading gpt2 models and tokenizer')
     # load gpt2 model
     # one model is to obtain behaviour(gt)
     # the other model is to prune and match the behaviour
@@ -395,7 +402,7 @@ def train(common_args, training_args, model_args, data_args, accelerator):
     gpt2_model = FPT2LMHeadModel.from_pretrained(
         model_args.model_name_or_path,
         with_embedding_nodes=model_args.with_embedding_nodes,
-    )
+    ).to("cuda")
 
     # tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
@@ -431,9 +438,8 @@ def train(common_args, training_args, model_args, data_args, accelerator):
         warmup_steps=training_args.warmup_steps,
     )
 
-    ## fix training_args ##
-
     # initialize Trainer
+    # trainer uses accelerate under the hood
     trainer = FPT2InfoTrainer(
         model=prune_model,
         tokenizer=tokenizer,
@@ -453,40 +459,29 @@ def train(common_args, training_args, model_args, data_args, accelerator):
         warmup_type=training_args.warmup_type,
     )
 
-
-
-def run():
-
-    # parse cl arguments
-    parser = HfArgumentParser((CommonArguments, TrainingArguments, ModelArguments, DataArguments))
-    common_args, training_args, model_args, data_args = parser.parse_args_into_dataclasses()
-
-    # set seed
-    set_seed(common_args.seed)
-
-    # initialize accelerator
-    accelerator = Accelerator(
-        mixed_precision=training_args.mixed_precision,
-        gradient_accumulation_steps=training_args.gradient_accumulation_steps,
-        log_with="tensorboard",
-        project_dir=common_args.repo_dir+'/experiments/edge_pruning/gt',
+    # training
+    checkpoint = None
+    if training_args.resume_from_checkpoint is not None:
+        checkpoint = training_args.resume_from_checkpoint
+    elif last_checkpoint is not None:
+        checkpoint = last_checkpoint
+    train_result = trainer.train(
+        resume_from_checkpoint=checkpoint,
     )
-    # we need to initialize the trackers we use, and also store our configuration
-    track_config = {
-        #"lr": training_args.lr,
-        #"train_steps": training_args.train_steps,
-        "seed": common_args.seed,
-        #"train_batch_size": training_args.per_device_train_batch_size,
-    }
-    # run = os.path.split(__file__)[-1].split(".")[0]
-    accelerator.init_trackers('runs', track_config)
 
-    # train function
-    train(common_args, training_args, model_args, data_args, accelerator)
+    # save
+    metrics = train_result.metrics
+    max_train_samples = (
+        data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
+    )
+    metrics["train_samples"] = min(max_train_samples, len(train_dataset))
 
-    # end logging
-    accelerator.end_training()
+    trainer.save_model()  # saves the tokenizer too
+
+    trainer.log_metrics("train", metrics)
+    trainer.save_metrics("train", metrics)
+    trainer.save_state()
 
 
 if __name__ == "__main__":
-    run()
+    train()

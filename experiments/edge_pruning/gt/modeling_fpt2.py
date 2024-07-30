@@ -450,6 +450,7 @@ class FPT2Attention(nn.Module):
 
         return outputs  # a, present, (attentions)
 
+
 class FPT2MLP(nn.Module):
     def __init__(self, intermediate_size, config):
         super().__init__()
@@ -462,6 +463,7 @@ class FPT2MLP(nn.Module):
         hidden_states = self.act(hidden_states)
         hidden_states = self.c_proj(hidden_states)
         return hidden_states
+
 
 class FPT2Block(nn.Module):
     def __init__(
@@ -800,6 +802,7 @@ class FPT2PreTrainedModel(PreTrainedModel):
                 # Special Scaled Initialization --> There are 2 Layer Norms per Transformer Block
                 p.data.normal_(mean=0.0, std=(self.config.initializer_range / math.sqrt(2 * self.config.n_layer)))
 
+
 @dataclass 
 class FPT2ModelOutput(ModelOutput):
     last_hidden_state: torch.FloatTensor = None
@@ -813,6 +816,7 @@ class FPT2ModelOutput(ModelOutput):
     model_node_sparsity: Optional[torch.FloatTensor] = None
     edge_loss: Optional[torch.FloatTensor] = None
     node_loss: Optional[torch.FloatTensor] = None
+
 
 class FPT2Model(FPT2PreTrainedModel):
     def __init__(
