@@ -141,13 +141,11 @@ class FPT2InfoTrainer(Seq2SeqTrainer):
         indices = inputs.pop("indices", None)
         digits_ = inputs.pop("digits", None)
         corr_input_ids = inputs.pop("corr_input_ids")
+        # b x seq_len
         input_ids = inputs.pop("input_ids")
-
-        print(inputs)
-        quit()
         
         with torch.no_grad():
-            # First get the logits from the GPT-2 model
+            # first get the logits from the GPT-2 model
             gpt2_logits = self.gpt2_model(input_ids=input_ids, **inputs).logits
             gpt2_logits = torch.gather(
                 gpt2_logits, 
@@ -157,7 +155,7 @@ class FPT2InfoTrainer(Seq2SeqTrainer):
             gpt2_logits = torch.gather(gpt2_logits, 1, self.digits.unsqueeze(0).repeat(gpt2_logits.shape[0], 1))
             gpt2_logits = torch.nn.functional.log_softmax(gpt2_logits, dim=-1)
             
-            # Now run the corrupted inputs through it, and retain the activations
+            # now run the corrupted inputs through it, and retain the activations
             corr_x = self.gpt2_model(input_ids=corr_input_ids, **inputs, output_writer_states=True).writer_states
         
         outputs = model(
@@ -319,6 +317,11 @@ class CustomTrainingArguments(Seq2SeqTrainingArguments):  # inherit #
         metadata={"help": "choose from : ['no', 'fp16', 'bf16', 'fp8']"}
     )
     max_steps: int = field(default=3000)
+    eval_steps: int = field(default=64)
+    save_steps: int = field(default=64)
+    per_device_train_batch_size: int = field(default=16)
+    per_device_eval_batch_size: int = field(default=8)
+    eval_accumulation_steps: int = field(default=8)
     warmup_steps: int = field(default=200)
     stop_optimizing_layer_if_higher_sparsity: bool = field(default=False)
     num_sparsity_warmup_steps: int = field(default=0)
@@ -327,6 +330,7 @@ class CustomTrainingArguments(Seq2SeqTrainingArguments):  # inherit #
         default=False,
         metadata={"help": "use this flag or pass in resume_from_checkpoint which overrides this flag"}
         )
+    remove_unused_columns: bool = field(default=False)
 
 
 @dataclass

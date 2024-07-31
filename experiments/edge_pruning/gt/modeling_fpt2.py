@@ -186,11 +186,13 @@ def get_num_readers(config):
     n_readers = config.n_layer * (3 * config.n_head + 1) + 1   # Q/K/V + MLP for each layer + final read
     return n_readers
 
+
 def get_num_writers(config, with_embedding_nodes=False):
     # If we include embedding nodes, there should be two for inputs_embeds and pos_embeds
     n_writers = 2 if with_embedding_nodes else 0
     n_writers += config.n_layer * (config.n_head + 1)   # Each head's O and the MLP
     return n_writers
+
 
 def get_num_edges(config, with_embedding_nodes=False):
     n_edges = 0
@@ -204,6 +206,7 @@ def get_num_edges(config, with_embedding_nodes=False):
     # The final layer reads from all writers
     n_edges += get_num_writers(config, with_embedding_nodes)
     return n_edges
+
 
 def get_num_nodes(config, with_embedding_nodes=False):
     # This only counts writer nodes
@@ -545,6 +548,7 @@ class FPT2Block(nn.Module):
         self.mlp_read_log_alphas.data.normal_(mean=10.0, std=0.01)
         self.mlp_write_log_alphas.data.normal_(mean=10.0, std=0.01)
 
+
     def attn_read(self, x, corr_x=None, embeds=None):
         # x is (writers, batch_size, sequence_length, hidden_size)
         # corr_x, if it exists, is (writers, batch_size, sequence_length, hidden_size)
@@ -576,6 +580,7 @@ class FPT2Block(nn.Module):
         
         return x_q, x_k, x_v, z_edges_sum
     
+
     def attn_write(self, residual, x, corr_x=None):
         # residual is (writers, batch_size, sequence_length, hidden_size)
         # x is (num_heads, batch_size, sequence_length, hidden_size)
@@ -597,6 +602,7 @@ class FPT2Block(nn.Module):
         
         return residual, z_nodes_sum
 
+
     def mlp_read(self, x, corr_x=None, embeds=None):
         # x is (writers, batch_size, sequence_length, hidden_size)
         # corr_x, if it exists, is (writers, batch_size, sequence_length, hidden_size)
@@ -614,6 +620,7 @@ class FPT2Block(nn.Module):
         z_edges_sum = torch.sum(z)
         
         return x_z, z_edges_sum
+
 
     def mlp_write(self, residual, x, corr_x=None):
         # residual is (writers, batch_size, sequence_length, hidden_size)
@@ -633,6 +640,7 @@ class FPT2Block(nn.Module):
         residual = residual + x
         
         return residual, torch.sum(z)
+
 
     @torch.no_grad()
     def get_edge_masks(self):
@@ -664,6 +672,7 @@ class FPT2Block(nn.Module):
         
         return (z_q, z_k, z_v, z_mlp)
     
+
     @torch.no_grad()
     def get_node_masks(self):
         z_attn = get_mask(
@@ -680,6 +689,7 @@ class FPT2Block(nn.Module):
         
         return (z_attn, z_mlp)
 
+
     @torch.no_grad()
     def set_attn_mask_value(self, from_idx, head_idx, qkv, value):
         if qkv == "q":
@@ -695,11 +705,13 @@ class FPT2Block(nn.Module):
             raise ValueError(f"Unrecognized qkv {qkv}")
         return old_value
     
+
     @torch.no_grad()
     def set_mlp_mask_value(self, from_idx, value):
         old_value = self.mlp_read_log_alphas[from_idx].detach().item()
         self.mlp_read_log_alphas[from_idx] = value
         return old_value
+
 
     def forward(
         self,
@@ -712,6 +724,8 @@ class FPT2Block(nn.Module):
         corr_x: Optional[torch.Tensor] = None,
         embeds:  Optional[torch.FloatTensor] = None,
     ) -> Union[Tuple[torch.Tensor], Optional[Tuple[torch.Tensor, Tuple[torch.FloatTensor, ...]]]]:
+        
+        # (writers, batch_size, sequence_length, hidden_size)
         residual = hidden_states
         
         q_hidden_states, k_hidden_states, v_hidden_states, z_attn_edges_sum = self.attn_read(
@@ -891,17 +905,20 @@ class FPT2Model(FPT2PreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
+
     @torch.no_grad()
     def set_edge_threshold_for_deterministic(self, edge_threshold_for_deterministic):
         self.edge_threshold_for_deterministic = edge_threshold_for_deterministic
         for layer in self.h:
             layer.set_edge_threshold_for_deterministic(edge_threshold_for_deterministic)
     
+
     @torch.no_grad()
     def set_node_threshold_for_deterministic(self, node_threshold_for_deterministic):
         self.node_threshold_for_deterministic = node_threshold_for_deterministic
         for layer in self.h:
             layer.set_node_threshold_for_deterministic(node_threshold_for_deterministic)
+
 
     @torch.no_grad()
     def get_edge_masks(self):
@@ -912,6 +929,7 @@ class FPT2Model(FPT2PreTrainedModel):
         masks.append((z_final,))
         return masks
     
+
     @torch.no_grad()
     def get_node_masks(self):
         masks = []
@@ -931,6 +949,7 @@ class FPT2Model(FPT2PreTrainedModel):
             masks.append(layer.get_node_masks())
         return masks
     
+
     @torch.no_grad()
     def get_edge_sparsity(self):
         edge_masks = self.get_edge_masks()
@@ -950,6 +969,7 @@ class FPT2Model(FPT2PreTrainedModel):
         s /= (1 if n == 0 else n)
         return 1 - s
     
+
     @torch.no_grad()
     def get_node_sparsity(self):
         node_masks = self.get_node_masks()
@@ -972,6 +992,7 @@ class FPT2Model(FPT2PreTrainedModel):
         s /= (1 if n == 0 else n)
         return 1 - s
     
+
     @torch.no_grad()
     def get_effective_edge_sparsity(self):
         edge_masks = self.get_edge_masks()
@@ -997,6 +1018,7 @@ class FPT2Model(FPT2PreTrainedModel):
         s /= (1 if n == 0 else n)
         return 1 - s        
     
+
     @torch.no_grad()
     def get_edges(self):
         edge_masks = self.get_edge_masks()
@@ -1068,6 +1090,7 @@ class FPT2Model(FPT2PreTrainedModel):
                 ))
         return edges
 
+
     @torch.no_grad()
     def add_or_remove_edge(self, from_node, to_node, remove=False, value=None):
         if value is None:
@@ -1091,6 +1114,7 @@ class FPT2Model(FPT2PreTrainedModel):
             qkv = parts[2]
             old_value = self.h[layer_idx].set_attn_mask_value(from_idx, head_idx, qkv, value)
         return old_value
+
 
     def parallelize(self, device_map=None):
         # Check validity of device_map
@@ -1118,6 +1142,7 @@ class FPT2Model(FPT2PreTrainedModel):
         # ln_f to last
         self.ln_f = self.ln_f.to(self.last_device)
 
+
     def deparallelize(self):
         warnings.warn(
             "Like `parallelize`, `deparallelize` is deprecated and will be removed in v5 of Transformers.",
@@ -1134,11 +1159,14 @@ class FPT2Model(FPT2PreTrainedModel):
         self.ln_f = self.ln_f.to("cpu")
         torch.cuda.empty_cache()
 
+
     def get_input_embeddings(self):
         return self.wte
 
+
     def set_input_embeddings(self, new_embeddings):
         self.wte = new_embeddings
+
 
     def _prune_heads(self, heads_to_prune):
         """
@@ -1146,6 +1174,7 @@ class FPT2Model(FPT2PreTrainedModel):
         """
         for layer, heads in heads_to_prune.items():
             self.h[layer].attn.prune_heads(heads)
+
 
     @torch.no_grad()
     def reset_all_log_alphas(self):
@@ -1157,6 +1186,7 @@ class FPT2Model(FPT2PreTrainedModel):
         self.final_read_log_alphas.data.normal_(mean=10.0, std=0.01)
         self.sparsity_lambda_edges_1.data.zero_()
         self.sparsity_lambda_nodes_1.data.zero_()
+
 
     def read(self, x, corr_x=None, embeds=None):
         # x is (writers, batch_size, sequence_length, hidden_size)
@@ -1174,10 +1204,12 @@ class FPT2Model(FPT2PreTrainedModel):
         
         return x_z, z_edges_sum
     
+
     def write(self, tok_embeds, pos_embeds, corr_x=None):
         # tok_embeds is (batch_size, sequence_length, hidden_size)
         # corr_x, if it exists, is (writers, batch_size, sequence_length, hidden_size)
-        if self.with_embedding_nodes:
+
+        if self.with_embedding_nodes:   # default = False
             z_tokens = get_mask(
                 self.token_write_log_alpha, 
                 training=self.training, 
@@ -1233,6 +1265,7 @@ class FPT2Model(FPT2PreTrainedModel):
         corr_x = None,
         output_writer_states: Optional[bool] = False,
     ) -> Union[Tuple, FPT2ModelOutput]:
+        
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
