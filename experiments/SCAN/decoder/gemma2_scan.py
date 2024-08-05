@@ -7,14 +7,21 @@ import argparse
 from accelerate import Accelerator
 from accelerate.utils import set_seed
 
+from peft import (
+    prepare_model_for_kbit_training,
+    LoraConfig, get_peft_model
+)
+
+import bitsandbytes as bnb
+
 import torch
 from torch.utils.data import DataLoader
 
 import evaluate
 
 from transformers import (
-    GemmaConfig, GemmaTokenizer, DataCollatorWithPadding, 
-    get_scheduler, GemmaForCausalLM, GenerationConfig,
+    AutoTokenizer, DataCollatorWithPadding, 
+    get_scheduler, AutoModelForCausalLM, GenerationConfig, BitsAndBytesConfig,
 )
 
 from datasets import load_dataset
@@ -34,11 +41,43 @@ def train(args, accelerator):
     raw_datasets['validation'] = train_val_split['test']
 
 
-    # load pretrained model or initialize from scratch. Load tokenizer
-    config = GemmaConfig.from_pretrained(args.model_name_or_path)
-    tokenizer = GemmaTokenizer.from_pretrained(args.model_name_or_path, pad_token="<pad>")
-    model = GemmaForCausalLM.from_pretrained(args.model_name_or_path, config=config)
+    # tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, pad_token="<pad>")
+
+    # model quantization
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model_name_or_path,
+        quantization_config=BitsAndBytesConfig(load_in_8bit=True),
+        attn_implementation='eager'
+    )
+    model = prepare_model_for_kbit_training(model)
+
+    # generation config
     generation_config = GenerationConfig.from_pretrained(args.model_name_or_path)
+
+    # LoRA
+    def print_trainable_parameters(model):
+        """
+        Prints the number of trainable parameters in the model.
+        """
+        trainable_params = 0
+        all_param = 0
+        for _, param in model.named_parameters():
+            all_param += param.numel()
+            if param.requires_grad:
+                trainable_params += param.numel()
+        print(
+            f"trainable params: {trainable_params} || all params: {all_param} || trainable%: {100 * trainable_params / all_param}"
+        )
+
+
+    lora_config = LoraConfig(
+        r=16, lora_alpha=32, target_modules=["q_proj", "v_proj"], lora_dropout=0.05, bias="none", task_type="CAUSAL_LM"
+    )
+
+
+    model = get_peft_model(model, lora_config)
+    print_trainable_parameters(model)
 
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
@@ -58,8 +97,9 @@ def train(args, accelerator):
 
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
-        model_inputs = tokenizer(inputs, targets, max_length=args.max_source_length, padding='max_length', truncation=True)
-        # labels same as inputs. labels shifted right in the model internally
+        #model_inputs = tokenizer(inputs, targets, max_length=args.max_source_length, padding='max_length', truncation=True)
+        model_inputs = tokenizer(inputs, targets, padding=True)
+        # labels same as inputs. labels shifted right in the model forward by default
         model_inputs['labels'] = model_inputs['input_ids'].copy()
 
         return model_inputs
@@ -106,7 +146,8 @@ def train(args, accelerator):
             "weight_decay": 0.0,
         },
     ]
-    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
+    #optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
+    optimizer = bnb.optim.Adam8bit(optimizer_grouped_parameters, lr=args.lr)
 
     # scheduler
     lr_scheduler = get_scheduler(
@@ -185,40 +226,49 @@ def train(args, accelerator):
                 model.eval()
                 accuracy = 0.0
                 val_loss = 0
+                
                 for batch in eval_dataloader:
                     with torch.no_grad():
                         outputs = model(**batch)
                         val_loss += outputs.loss.item()
 
                     # generate and compute metric
-                    with torch.no_grad():
-                        generated_tokens = accelerator.unwrap_model(model).generate(
-                            batch["input_ids"],
-                            attention_mask=batch["attention_mask"],
-                            generation_config=generation_config,
-                            **gen_kwargs,
-                        )
 
-                        generated_tokens = accelerator.pad_across_processes(
-                            generated_tokens, dim=1, pad_index=tokenizer.pad_token_id
+                    ## fix cast (half and float) error ##
+
+                    with torch.autocast(device_type="cuda"):
+                        with torch.no_grad():
+                            generated_tokens = accelerator.unwrap_model(model).generate(
+                                batch["input_ids"],  ## need to be only "input" ##
+                                attention_mask=batch["attention_mask"],
+                                generation_config=generation_config,
+                                **gen_kwargs,
                             )
-                        labels = batch["labels"]
-                        # we did not pad to max length, we need to pad the labels too
-                        labels = accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
 
-                        generated_tokens, labels = accelerator.gather_for_metrics((generated_tokens, labels))
-                        generated_tokens = generated_tokens.cpu().numpy()
-                        labels = labels.cpu().numpy()
+                            generated_tokens = accelerator.pad_across_processes(
+                                generated_tokens, dim=1, pad_index=tokenizer.pad_token_id
+                                )
 
-                        # replace -100 in the labels as we can't decode them.
-                        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+                            ### fix labels ##
 
-                        if isinstance(generated_tokens, tuple):
-                            generated_tokens = generated_tokens[0]
-                        decoded_preds = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
-                        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+                            labels = batch["labels"]    ## need to be only "output" ##
+                            
+                            # we did not pad to max length, we need to pad the labels too
+                            labels = accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
 
-                        accuracy += sum([decoded_preds[i] == decoded_labels[i] for i in range(len(decoded_preds))])
+                            generated_tokens, labels = accelerator.gather_for_metrics((generated_tokens, labels))
+                            generated_tokens = generated_tokens.cpu().numpy()
+                            labels = labels.cpu().numpy()
+
+                            # replace -100 in the labels as we can't decode them.
+                            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+
+                            if isinstance(generated_tokens, tuple):
+                                generated_tokens = generated_tokens[0]
+                            decoded_preds = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+                            decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+
+                            accuracy += sum([decoded_preds[i] == decoded_labels[i] for i in range(len(decoded_preds))])
 
                     eval_bar.update(1)
 
@@ -276,7 +326,7 @@ def run():
     )
     parser.add_argument(
         "--model_name_or_path",
-        default='google/gemma-2b',
+        default='google/gemma-2-2b',
         type=str,
         help="Path to pretrained model or model identifier from huggingface.co/models",
     )
@@ -312,12 +362,12 @@ def run():
     parser.add_argument(
         '--max_source_length',
         type=int,
-        default=1024
+        default=2056
     )
     parser.add_argument(
         '--max_target_length',
         type=int,
-        default=1024
+        default=2056
     )
     parser.add_argument(
         "--output_dir",
@@ -373,10 +423,6 @@ def run():
         type=int,
     )
     parser.add_argument(
-        "--from_scratch",
-        action="store_true",
-    )
-    parser.add_argument(
         "--lr",
         default=5e-5, 
         type=float,
@@ -394,7 +440,7 @@ def run():
     )
     parser.add_argument(
         "--mixed_precision", # choose from no, fp16, bf16 or fp8
-        default='fp16',
+        default='no',
         type=str,
     )
     parser.add_argument(
@@ -438,7 +484,6 @@ def run():
 
     # end logging
     accelerator.end_training()
-
 
 
 
