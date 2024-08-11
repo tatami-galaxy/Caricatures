@@ -70,6 +70,10 @@ def train(args, accelerator):
         model_inputs = tokenizer(inputs, targets, padding=True)
         # labels same as inputs. labels shifted right in the model forward by default
         model_inputs['labels'] = model_inputs['input_ids'].copy()
+        # set label padding to -100 
+        model_inputs['labels'] = [
+            [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in model_inputs['labels']
+        ]
 
         return model_inputs
 
