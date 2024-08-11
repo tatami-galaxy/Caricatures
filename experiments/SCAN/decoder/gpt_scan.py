@@ -67,7 +67,7 @@ def train(args, accelerator):
 
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
-        model_inputs = tokenizer(inputs, targets)
+        model_inputs = tokenizer(inputs, targets, padding=True)
         # labels same as inputs. labels shifted right in the model forward by default
         model_inputs['labels'] = model_inputs['input_ids'].copy()
 
