@@ -59,6 +59,9 @@ def train(args, accelerator):
     print(mlen)
     quit()"""
 
+    print(tokenizer.pad_token_id)
+    quit()
+
 
     def preprocess_function(examples):
         # commands, actions
