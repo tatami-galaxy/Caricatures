@@ -104,10 +104,6 @@ def train(args, accelerator):
         eval_dataset, collate_fn=default_data_collator, batch_size=args.per_device_eval_batch_size
     )
 
-    for batch in train_dataloader:
-        print(batch)
-        quit()
-
     # prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
@@ -197,7 +193,6 @@ def train(args, accelerator):
 
             if (global_step + 1) % args.eval_steps == 0:
                 model.eval()
-                accuracy = 0.0
                 val_loss = 0
                 
                 for batch in eval_dataloader:
@@ -209,8 +204,6 @@ def train(args, accelerator):
 
                 eval_bar.refresh()
                 eval_bar.reset()
-
-                accuracy = accuracy / len(raw_datasets['validation'])
 
                 accelerator.print('step : {}, val loss  : {}'.format(global_step + 1, val_loss/len(eval_dataloader)))
                 accelerator.log({
