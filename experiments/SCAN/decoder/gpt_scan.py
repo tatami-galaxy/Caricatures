@@ -67,7 +67,8 @@ def train(args, accelerator):
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
         model_inputs = tokenizer(
-            inputs+tokenizer.eos_token, targets+tokenizer.eos_token,
+            [i+tokenizer.eos_token for i in inputs],
+            [t+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_source_length
         )
         # labels same as inputs. labels shifted right in the model forward by default
@@ -98,6 +99,9 @@ def train(args, accelerator):
             load_from_cache_file=not args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
+
+    print(train_dataset[0])
+    quit()
 
     # data collator and loaders
 
