@@ -100,9 +100,6 @@ def train(args, accelerator):
             desc="Running tokenizer on dataset",
         )
 
-    print(train_dataset[0])
-    quit()
-
     # data collator and loaders
 
     train_dataloader = DataLoader(
