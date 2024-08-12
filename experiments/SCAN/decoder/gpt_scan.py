@@ -66,7 +66,7 @@ def train(args, accelerator):
 
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
-        model_inputs = tokenizer(inputs, targets)
+        model_inputs = tokenizer(inputs, targets, padding=True)
         # labels same as inputs. labels shifted right in the model forward by default
         model_inputs['labels'] = model_inputs['input_ids'].copy()
         # set label padding to -100 
@@ -98,13 +98,11 @@ def train(args, accelerator):
 
     # data collator and loaders
 
-    data_collator = DataCollatorWithPadding(tokenizer)
-
     train_dataloader = DataLoader(
-        train_dataset, shuffle=True, collate_fn=data_collator, batch_size=args.per_device_train_batch_size
+        train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.per_device_train_batch_size
     )
     eval_dataloader = DataLoader(
-        eval_dataset, collate_fn=data_collator, batch_size=args.per_device_eval_batch_size
+        eval_dataset, collate_fn=default_data_collator, batch_size=args.per_device_eval_batch_size
     )
 
     # prepare optimizer and schedule (linear warmup and decay)
