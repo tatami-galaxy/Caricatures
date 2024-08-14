@@ -35,7 +35,12 @@ def train(args, accelerator):
 
 
     # tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, pad_token="<pad>")
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name_or_path,
+        pad_token="<pad>",
+        sep_token="<sep>",
+        #eos_token="<eos>",
+    )
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
@@ -67,7 +72,7 @@ def train(args, accelerator):
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
         model_inputs = tokenizer(
-            [i+tokenizer.eos_token for i in inputs],
+            [i+tokenizer.sep_token for i in inputs],
             [t+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_source_length
         )
