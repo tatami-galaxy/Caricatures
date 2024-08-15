@@ -6,7 +6,7 @@ accelerate launch gemma_scan.py --output_dir /home/drdo/Caricatures/models/scan_
 
 accelerate launch gpt_scan.py --output_dir /home/drdo/Caricatures/models/scan_gpt2 --lr 1e-3
 
-accelerate launch gpt_scan.py --model_name_or_path openai-community/openai-gpt --output_dir /root/Caricatures/models/scan_gpt --lr 1e-3 --train_steps 50000 --eval_steps 1000 
+accelerate launch gpt_scan.py --model_name_or_path openai-community/gpt2 --output_dir /root/Caricatures/models/scan_gpt2 --train_steps 50000 --eval_steps 1000 
 
 accelerate launch gpt_scan.py --model_name_or_path distilbert/distilgpt2 --output_dir /root/Caricatures/models/scan_distilgpt2 --train_steps 50000 --eval_steps 1000 
 
