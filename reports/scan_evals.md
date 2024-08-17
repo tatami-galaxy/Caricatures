@@ -7,6 +7,7 @@ All trained on a single RTX 4090 for 100k steps (need to account for batch size)
 | simple | t5-base | Yes | 18k | 16 | 5e-5 | - | 0.979 |
 | simple | t5-base | No | 18k | 16 | 5e-5 | - | 0.987 |
 | simple | distilgpt2 | Yes | 19k | 16 | 5e-5 | - | 0.65 |
+| simple | gpt2 | Yes | 50k | 8 | 5e-5 | - | 0.81 |
 | simple | gemma-2b | Yes | - | - | - | - | - |
 
 | Split | Model | Pre-Trained | Eval at Step | Batch Size | Learning Rate | Eval Accuracy ☨ | Test Accuracy ☨ |
