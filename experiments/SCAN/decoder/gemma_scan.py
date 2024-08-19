@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 import evaluate
 
 from transformers import (
-    AutoTokenizer, DataCollatorWithPadding, 
+    AutoTokenizer, default_data_collator, 
     get_scheduler, AutoModelForCausalLM, GenerationConfig, BitsAndBytesConfig,
 )
 
@@ -42,7 +42,13 @@ def train(args, accelerator):
 
 
     # tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, pad_token="<pad>")
+    # tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name_or_path,
+        pad_token="<pad>",
+        sep_token="<sep>",
+        #eos_token="<eos>",
+    )
 
     # model quantization
     model = AutoModelForCausalLM.from_pretrained(
@@ -89,6 +95,20 @@ def train(args, accelerator):
     input_column = column_names[0]
     output_column = column_names[1]
 
+    """mlen = 0
+    for sample in raw_datasets['validation']:
+        input = sample[input_column]
+        target = sample[output_column]
+        model_inputs = tokenizer(
+            input+" "+tokenizer.sep_token+ " ",
+            target+" "+tokenizer.eos_token,
+        )
+        l = len(model_inputs['input_ids'])
+        if l > mlen:
+            mlen = l
+    print(mlen) # 208
+    quit()"""
+
 
     def preprocess_function(examples):
         # commands, actions
@@ -97,10 +117,17 @@ def train(args, accelerator):
 
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
-        #model_inputs = tokenizer(inputs, targets, max_length=args.max_source_length, padding='max_length', truncation=True)
-        model_inputs = tokenizer(inputs, targets, padding=True)
+        model_inputs = tokenizer(
+            [i+" "+tokenizer.sep_token+ " " for i in inputs],
+            [t+" "+tokenizer.eos_token for t in targets],
+            padding='max_length', max_length=args.max_source_length
+        )
         # labels same as inputs. labels shifted right in the model forward by default
         model_inputs['labels'] = model_inputs['input_ids'].copy()
+        # set label padding to -100 
+        model_inputs['labels'] = [
+            [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in model_inputs['labels']
+        ]
 
         return model_inputs
 
@@ -125,13 +152,11 @@ def train(args, accelerator):
         )
 
     # data collator and loaders
-    data_collator = DataCollatorWithPadding(tokenizer)
-
     train_dataloader = DataLoader(
-        train_dataset, shuffle=True, collate_fn=data_collator, batch_size=args.per_device_train_batch_size
+        train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.per_device_train_batch_size
     )
     eval_dataloader = DataLoader(
-        eval_dataset, collate_fn=data_collator, batch_size=args.per_device_eval_batch_size
+        eval_dataset, collate_fn=default_data_collator, batch_size=args.per_device_eval_batch_size
     )
 
     # prepare optimizer and schedule (linear warmup and decay)
@@ -224,7 +249,6 @@ def train(args, accelerator):
 
             if (global_step + 1) % args.eval_steps == 0:
                 model.eval()
-                accuracy = 0.0
                 val_loss = 0
                 
                 for batch in eval_dataloader:
@@ -232,55 +256,13 @@ def train(args, accelerator):
                         outputs = model(**batch)
                         val_loss += outputs.loss.item()
 
-                    # generate and compute metric
-
-                    ## fix cast (half and float) error ##
-
-                    with torch.autocast(device_type="cuda"):
-                        with torch.no_grad():
-                            generated_tokens = accelerator.unwrap_model(model).generate(
-                                batch["input_ids"],  ## need to be only "input" ##
-                                attention_mask=batch["attention_mask"],
-                                generation_config=generation_config,
-                                **gen_kwargs,
-                            )
-
-                            generated_tokens = accelerator.pad_across_processes(
-                                generated_tokens, dim=1, pad_index=tokenizer.pad_token_id
-                                )
-
-                            ### fix labels ##
-
-                            labels = batch["labels"]    ## need to be only "output" ##
-                            
-                            # we did not pad to max length, we need to pad the labels too
-                            labels = accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
-
-                            generated_tokens, labels = accelerator.gather_for_metrics((generated_tokens, labels))
-                            generated_tokens = generated_tokens.cpu().numpy()
-                            labels = labels.cpu().numpy()
-
-                            # replace -100 in the labels as we can't decode them.
-                            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-
-                            if isinstance(generated_tokens, tuple):
-                                generated_tokens = generated_tokens[0]
-                            decoded_preds = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
-                            decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-                            accuracy += sum([decoded_preds[i] == decoded_labels[i] for i in range(len(decoded_preds))])
-
                     eval_bar.update(1)
 
                 eval_bar.refresh()
                 eval_bar.reset()
 
-                accuracy = accuracy / len(raw_datasets['validation'])
-
-                accelerator.print('step : {}, accuracy : {}'.format(global_step + 1, accuracy))
-                accelerator.print('val loss : {}'.format(val_loss/len(eval_dataloader)))
+                accelerator.print('step : {}, val loss  : {}'.format(global_step + 1, val_loss/len(eval_dataloader)))
                 accelerator.log({
-                    "accuracy": accuracy,
                     "train_loss": total_loss / (args.eval_steps * accelerator.state.num_processes * args.per_device_train_batch_size),
                     "val_loss": val_loss / len(eval_dataloader)
                 },
@@ -302,7 +284,6 @@ def train(args, accelerator):
                     unwrapped_model.config.save_pretrained(
                         output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
                     )
-                    generation_config.save_pretrained(output_dir)
 
                 model.train()
                 total_loss = 0
@@ -311,6 +292,7 @@ def train(args, accelerator):
 
             if global_step >= args.train_steps:
                 return
+
 
 
 
@@ -362,12 +344,12 @@ def run():
     parser.add_argument(
         '--max_source_length',
         type=int,
-        default=2056
+        default=512
     )
     parser.add_argument(
         '--max_target_length',
         type=int,
-        default=2056
+        default=512
     )
     parser.add_argument(
         "--output_dir",
@@ -394,12 +376,12 @@ def run():
     )
     parser.add_argument(
         "--per_device_train_batch_size",
-        default=16,
+        default=8,
         type=int,
     )
     parser.add_argument(
         "--per_device_eval_batch_size",
-        default=16,
+        default=8,
         type=int,
     )
     parser.add_argument(

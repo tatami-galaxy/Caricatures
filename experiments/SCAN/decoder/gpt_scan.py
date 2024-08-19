@@ -106,7 +106,6 @@ def train(args, accelerator):
         )
 
     # data collator and loaders
-
     train_dataloader = DataLoader(
         train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.per_device_train_batch_size
     )
