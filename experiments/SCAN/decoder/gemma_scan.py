@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader
 
 import evaluate
 
+# use PeftModel instead of AutoModel if adding new tokens
 from transformers import (
     AutoTokenizer, default_data_collator, 
     get_scheduler, AutoModelForCausalLM, GenerationConfig, BitsAndBytesConfig,
@@ -42,13 +43,8 @@ def train(args, accelerator):
 
 
     # tokenizer
-    # tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name_or_path,
-        pad_token="<pad>",
-        sep_token="<sep>",
-        #eos_token="<eos>",
-    )
+    # left padding by default
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path,)
 
     # model quantization
     model = AutoModelForCausalLM.from_pretrained(
@@ -99,6 +95,10 @@ def train(args, accelerator):
     for sample in raw_datasets['validation']:
         input = sample[input_column]
         target = sample[output_column]
+        print(tokenizer.decode(tokenizer(input,target)['input_ids'], skip_special_tokens=False))
+        quit()
+        # <bos>run around right thrice after jump around right twice<bos>I_TURN_RIGHT I_JUMP I_TURN_RIGHT... 
+        
         model_inputs = tokenizer(
             input+" "+tokenizer.sep_token+ " ",
             target+" "+tokenizer.eos_token,
@@ -115,11 +115,8 @@ def train(args, accelerator):
         inputs = examples[input_column]
         targets = examples[output_column]
 
-        # tokenize as single sequence separated by special token (<bos>)
-        # padding = False by default
         model_inputs = tokenizer(
-            [i+" "+tokenizer.sep_token+ " " for i in inputs],
-            [t+" "+tokenizer.eos_token for t in targets],
+            inputs, targets,
             padding='max_length', max_length=args.max_source_length
         )
         # labels same as inputs. labels shifted right in the model forward by default
@@ -215,13 +212,6 @@ def train(args, accelerator):
                 train_dataloader, steps_completed)  # consider dataset len
 
 
-    num_beams = args.num_beams if args.num_beams is not None else model.config.num_beams
-    gen_kwargs = {
-        "max_length": args.max_target_length,
-        "num_beams": num_beams,
-    }
-
-
     # Training
 
     # main progress bar
@@ -276,14 +266,13 @@ def train(args, accelerator):
                 output_dir = f"checkpoint-{global_step + 1}"
                 if args.output_dir is not None:
                     output_dir = os.path.join(args.output_dir, output_dir)
-                    accelerator.save_state(output_dir)
-                    # save config
                     accelerator.wait_for_everyone()
                     unwrapped_model = accelerator.unwrap_model(model)
-                    # model.config.save_pretrained(output_dir)
+                    unwrapped_model.save_pretrained(output_dir)
                     unwrapped_model.config.save_pretrained(
                         output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
                     )
+                    accelerator.save_state(output_dir)
 
                 model.train()
                 total_loss = 0
