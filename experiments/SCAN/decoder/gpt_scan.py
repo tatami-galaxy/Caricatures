@@ -67,6 +67,7 @@ def train(args, accelerator):
     print(mlen)
     quit()"""
 
+    ## fix ##
     def preprocess_function(examples):
         # commands, actions
         inputs = examples[input_column]
