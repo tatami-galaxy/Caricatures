@@ -39,8 +39,9 @@ def train(args, accelerator):
         args.model_name_or_path,
         pad_token="<pad>",
         sep_token="<sep>",
-        #eos_token="<eos>",
     )
+
+    print(tokenizer.bos_token)
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
@@ -57,7 +58,11 @@ def train(args, accelerator):
 
     """mlen = 0
     for sample in raw_datasets['validation']:
-        model_inputs = tokenizer(sample[input_column], sample[output_column])
+        input = sample[input_column]
+        target = sample[output_column]
+        #model_inputs = tokenizer(input, target)
+        print(tokenizer.decode(tokenizer(input+tokenizer.sep_token, target+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
+        quit()
         l = len(model_inputs['input_ids'])
         if l > mlen:
             mlen = l
