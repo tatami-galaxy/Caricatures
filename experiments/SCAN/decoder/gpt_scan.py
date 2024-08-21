@@ -41,8 +41,6 @@ def train(args, accelerator):
         sep_token="<sep>",
     )
 
-    print(tokenizer.bos_token)
-
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
 
