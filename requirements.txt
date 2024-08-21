@@ -3,3 +3,4 @@ datasets
 accelerate
 evaluate
 gitpython
+tensorboard

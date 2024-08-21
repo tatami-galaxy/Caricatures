@@ -162,7 +162,7 @@ def run():
     )
     parser.add_argument(
         "--model_name_or_path",
-        default='google-t5/t5-base',  # gp2, gemma
+        default='google-t5/t5-base', 
         type=str,
         help="Path to pretrained model or model identifier from huggingface.co/models",
     )

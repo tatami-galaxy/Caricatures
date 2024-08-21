@@ -6,6 +6,8 @@ All trained on a single RTX 4090 for 100k steps (need to account for batch size)
 | ------- | ------- | ------ | -------- | -------- | --------- | ------ | ----- |
 | simple | t5-base | Yes | 18k | 16 | 5e-5 | - | 0.979 |
 | simple | t5-base | No | 18k | 16 | 5e-5 | - | 0.987 |
+| simple | distilgpt2 | Yes | 19k | 16 | 5e-5 | - | 0.65 |
+| simple | gpt2 | Yes | 80k | 8 | 5e-5 | - | 0.81 |
 | simple | gemma-2b | Yes | - | - | - | - | - |
 
 | Split | Model | Pre-Trained | Eval at Step | Batch Size | Learning Rate | Eval Accuracy ☨ | Test Accuracy ☨ |
@@ -14,6 +16,7 @@ All trained on a single RTX 4090 for 100k steps (need to account for batch size)
 | length | t5-base | No | 60k | 16 | 1e-3 | 0.978 | 0.005 |
 | length | flan-t5-base | Yes | 70k | 16 | 5e-5 | 0.991 | 0.138 |
 | length | flan-t5-large | Yes | 75k | 8 | 5e-5 | 0.995 | 0.136 |
+| length | gpt2 | Yes | 50k | 8 | 5e-5 | - | 0.01 |
 | length | gemma-2b | Yes | - | - | - | - | - |
 
 | Split | Model | Pre-Trained | Eval at Step | Batch Size | Learning Rate | Eval Accuracy ☨ | Test Accuracy ☨ |

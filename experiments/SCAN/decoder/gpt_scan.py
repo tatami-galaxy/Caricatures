@@ -7,22 +7,14 @@ import argparse
 from accelerate import Accelerator
 from accelerate.utils import set_seed
 
-from peft import (
-    prepare_model_for_kbit_training,
-    LoraConfig, get_peft_model
-)
-
-import bitsandbytes as bnb
-
 import torch
 from torch.utils.data import DataLoader
 
 import evaluate
 
-# use PeftModel instead of AutoModel if adding new tokens
 from transformers import (
-    AutoTokenizer, default_data_collator, 
-    get_scheduler, AutoModelForCausalLM, GenerationConfig, BitsAndBytesConfig,
+    AutoTokenizer, default_data_collator, DataCollatorWithPadding,
+    get_scheduler, AutoModelForCausalLM
 )
 
 from datasets import load_dataset
@@ -43,43 +35,14 @@ def train(args, accelerator):
 
 
     # tokenizer
-    # left padding by default
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path,)
-
-    # model quantization
-    model = AutoModelForCausalLM.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(
         args.model_name_or_path,
-        quantization_config=BitsAndBytesConfig(load_in_8bit=True),
-        attn_implementation='eager'
-    )
-    model = prepare_model_for_kbit_training(model)
-
-    # generation config
-    generation_config = GenerationConfig.from_pretrained(args.model_name_or_path)
-
-    # LoRA
-    def print_trainable_parameters(model):
-        """
-        Prints the number of trainable parameters in the model.
-        """
-        trainable_params = 0
-        all_param = 0
-        for _, param in model.named_parameters():
-            all_param += param.numel()
-            if param.requires_grad:
-                trainable_params += param.numel()
-        print(
-            f"trainable params: {trainable_params} || all params: {all_param} || trainable%: {100 * trainable_params / all_param}"
-        )
-
-
-    lora_config = LoraConfig(
-        r=16, lora_alpha=32, target_modules=["q_proj", "v_proj"], lora_dropout=0.05, bias="none", task_type="CAUSAL_LM"
+        pad_token="<pad>",
+        sep_token="<sep>",
     )
 
-
-    model = get_peft_model(model, lora_config)
-    print_trainable_parameters(model)
+    # model
+    model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
 
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
@@ -95,28 +58,24 @@ def train(args, accelerator):
     for sample in raw_datasets['validation']:
         input = sample[input_column]
         target = sample[output_column]
-        print(tokenizer.decode(tokenizer(input,target+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
+        #model_inputs = tokenizer(input, target)
+        print(tokenizer.decode(tokenizer(input+tokenizer.sep_token, target+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
         quit()
-        # <bos>run around right thrice after jump around right twice<bos>I_TURN_RIGHT I_JUMP I_TURN_RIGHT...<eos> 
-        
-        model_inputs = tokenizer(
-            input+" "+tokenizer.sep_token+ " ",
-            target+" "+tokenizer.eos_token,
-        )
         l = len(model_inputs['input_ids'])
         if l > mlen:
             mlen = l
-    print(mlen) # 208
+    print(mlen)
     quit()"""
-
 
     def preprocess_function(examples):
         # commands, actions
         inputs = examples[input_column]
         targets = examples[output_column]
 
+        # tokenize as single sequence separated by special token (<bos>)
+        # padding = False by default
         model_inputs = tokenizer(
-            inputs,
+            [i+tokenizer.sep_token for i in inputs],
             [t+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_source_length
         )
@@ -134,8 +93,8 @@ def train(args, accelerator):
         train_dataset = raw_datasets["train"].map(
             preprocess_function,
             batched=True,
-            #batch_size=4,
-            num_proc=args.num_workers,  # set as 1 for testing
+            #batch_size=4, # for testing
+            num_proc=args.num_workers,  # set as 1 for testing, otherwise args.num_workers,
             remove_columns=column_names,
             load_from_cache_file=not args.overwrite_cache,
             desc="Running tokenizer on dataset",
@@ -148,8 +107,6 @@ def train(args, accelerator):
             load_from_cache_file=not args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
-
-    #print(tokenizer.decode(train_dataset[0]['input_ids'], skip_special_tokens=False))
 
     # data collator and loaders
     train_dataloader = DataLoader(
@@ -171,8 +128,7 @@ def train(args, accelerator):
             "weight_decay": 0.0,
         },
     ]
-    #optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
-    optimizer = bnb.optim.Adam8bit(optimizer_grouped_parameters, lr=args.lr)
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
 
     # scheduler
     lr_scheduler = get_scheduler(
@@ -213,6 +169,13 @@ def train(args, accelerator):
         if args.skip_steps:
             train_dataloader = accelerator.skip_first_batches(
                 train_dataloader, steps_completed)  # consider dataset len
+
+
+    num_beams = args.num_beams if args.num_beams is not None else model.config.num_beams
+    gen_kwargs = {
+        "max_length": args.max_target_length,
+        "num_beams": num_beams,
+    }
 
 
     # Training
@@ -269,13 +232,14 @@ def train(args, accelerator):
                 output_dir = f"checkpoint-{global_step + 1}"
                 if args.output_dir is not None:
                     output_dir = os.path.join(args.output_dir, output_dir)
+                    accelerator.save_state(output_dir)
+                    # save config
                     accelerator.wait_for_everyone()
                     unwrapped_model = accelerator.unwrap_model(model)
-                    unwrapped_model.save_pretrained(output_dir)
+                    # model.config.save_pretrained(output_dir)
                     unwrapped_model.config.save_pretrained(
                         output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
                     )
-                    accelerator.save_state(output_dir)
 
                 model.train()
                 total_loss = 0
@@ -284,7 +248,6 @@ def train(args, accelerator):
 
             if global_step >= args.train_steps:
                 return
-
 
 
 
@@ -300,7 +263,7 @@ def run():
     )
     parser.add_argument(
         "--model_name_or_path",
-        default='google/gemma-2-2b',
+        default='openai-community/gpt2',
         type=str,
         help="Path to pretrained model or model identifier from huggingface.co/models",
     )
@@ -368,12 +331,12 @@ def run():
     )
     parser.add_argument(
         "--per_device_train_batch_size",
-        default=8,
+        default=16,
         type=int,
     )
     parser.add_argument(
         "--per_device_eval_batch_size",
-        default=8,
+        default=16,
         type=int,
     )
     parser.add_argument(
