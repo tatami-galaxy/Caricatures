@@ -95,9 +95,9 @@ def train(args, accelerator):
     for sample in raw_datasets['validation']:
         input = sample[input_column]
         target = sample[output_column]
-        print(tokenizer.decode(tokenizer(input,target)['input_ids'], skip_special_tokens=False))
+        print(tokenizer.decode(tokenizer(input,target+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
         quit()
-        # <bos>run around right thrice after jump around right twice<bos>I_TURN_RIGHT I_JUMP I_TURN_RIGHT... 
+        # <bos>run around right thrice after jump around right twice<bos>I_TURN_RIGHT I_JUMP I_TURN_RIGHT...<eos> 
         
         model_inputs = tokenizer(
             input+" "+tokenizer.sep_token+ " ",
@@ -116,7 +116,8 @@ def train(args, accelerator):
         targets = examples[output_column]
 
         model_inputs = tokenizer(
-            inputs, targets,
+            inputs,
+            [t+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_source_length
         )
         # labels same as inputs. labels shifted right in the model forward by default
@@ -147,6 +148,8 @@ def train(args, accelerator):
             load_from_cache_file=not args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
+
+    #print(tokenizer.decode(train_dataset[0]['input_ids'], skip_special_tokens=False))
 
     # data collator and loaders
     train_dataloader = DataLoader(
