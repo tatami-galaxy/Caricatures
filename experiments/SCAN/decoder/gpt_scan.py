@@ -59,7 +59,7 @@ def train(args, accelerator):
         input = sample[input_column]
         target = sample[output_column]
         #model_inputs = tokenizer(input, target)
-        print(tokenizer.decode(tokenizer(input+tokenizer.sep_token, target+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
+        print(tokenizer.decode(tokenizer(input+' '+tokenizer.sep_token+' ', target+' '+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
         quit()
         l = len(model_inputs['input_ids'])
         if l > mlen:
@@ -76,8 +76,8 @@ def train(args, accelerator):
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
         model_inputs = tokenizer(
-            [i+tokenizer.sep_token for i in inputs],
-            [t+tokenizer.eos_token for t in targets],
+            [i+' '+tokenizer.sep_token+' ' for i in inputs],
+            [t+' '+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_source_length
         )
         # labels same as inputs. labels shifted right in the model forward by default
@@ -108,6 +108,9 @@ def train(args, accelerator):
             load_from_cache_file=not args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
+
+    #print(tokenizer.decode(train_dataset[0]['input_ids'], skip_special_tokens=False))
+    #quit()
 
     # data collator and loaders
     train_dataloader = DataLoader(
