@@ -37,3 +37,6 @@ Todo:
 - Install pip in conda: !conda install pip -y
 - Install pyvene in env: pip install git+https://github.com/stanfordnlp/pyvene.git ()
 - Checked install path in python with: print(pyvene.__file__)
+
+30/07/2024
+- Creating Causal Model for SCAN in Experiements>Notebooks
