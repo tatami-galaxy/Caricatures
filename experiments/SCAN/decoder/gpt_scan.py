@@ -76,8 +76,8 @@ def train(args, accelerator):
         # tokenize as single sequence separated by special token (<bos>)
         # padding = False by default
         model_inputs = tokenizer(
-            [i+' '+tokenizer.sep_token+' ' for i in inputs],
-            [t+' '+tokenizer.eos_token for t in targets],
+            [i+tokenizer.sep_token for i in inputs],
+            [t+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_source_length
         )
         # labels same as inputs. labels shifted right in the model forward by default
