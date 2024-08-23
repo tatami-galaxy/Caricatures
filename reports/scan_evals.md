@@ -8,7 +8,7 @@ All trained on a single RTX 4090:
 | simple | t5-base | No | 18k | 16 | 5e-5 | - | 0.987 |
 | simple | distilgpt2 | Yes | 19k | 16 | 5e-5 | - | 0.65 |
 | simple | gpt2 | Yes | 60k | 8 | 5e-5 | - | 0.82 |
-| simple | gpt2-large | Yes | - | 2 | 5e-5 | - | - |
+| simple | gpt2-large | Yes | 160k | 2 | 5e-5 | - | 0.66 |
 | simple | gemma-2b | Yes | - | - | - | - | - |
 
 | Split | Model | Pre-Trained | Eval at Step | Batch Size | Learning Rate | Eval Accuracy ☨ | Test Accuracy ☨ |
