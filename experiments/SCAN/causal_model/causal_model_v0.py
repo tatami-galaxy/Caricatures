@@ -33,6 +33,8 @@ nums_inv = {v: k for k, v in nums.items()}
 # can be separated into at least 2 steps :
 # 1. mapping turns
 # 2. mapping nums
+
+## specify assumptions ##
 def variable_binding(l):
 
     # check if no nums or turns
