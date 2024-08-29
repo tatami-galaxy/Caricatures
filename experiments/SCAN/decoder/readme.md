@@ -1,4 +1,4 @@
-#### train
+#### 4090
 ```bash
 accelerate launch gemma_scan.py --output_dir /path/to/output_dir --dataset_config length --model_name_or_path google/gemma-2-2b --train_steps 200000 --lr 1e-3 --mixed_precision no --per_device_train_batch_size 8 --per_device_eval_batch_size 8
 
@@ -16,3 +16,8 @@ accelerate launch gpt_scan.py --model_name_or_path distilbert/distilgpt2 --outpu
 
 ```
 
+#### A100
+```bash
+CUDA_VISIBLE_DEVICES=3,4,5,6 accelerate launch gpt_scan.py --model_name_or_path local_model_path --output_dir /home/ujan/Caricatures/models/scan_gpt2-large --train_steps 200000 --eval_steps 10000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 
+
+```

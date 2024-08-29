@@ -43,17 +43,15 @@ def train(args, accelerator):
         command_strs = x[output_column].split()
         commands.update(command_strs)
 
-
-    # TODO : add commands as new tokens? 
-
     # tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_name_or_path,
         pad_token="<pad>",
         sep_token="<sep>",
     )
+    # TODO : add commands as new tokens? 
     num_added_toks = tokenizer.add_tokens(list(commands))
-    print("We have added", num_added_toks, "tokens")
+    accelerator.print("We have added", num_added_toks, "tokens")
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)

@@ -2,7 +2,6 @@ from datasets import load_dataset
 
 # Assumptions :
 # 1. command can have at most 2 'parts' separated by either 'and' or 'after'
-# 2. 
 
 actions = {
     "walk": "I_WALK",
@@ -64,7 +63,7 @@ def variable_binding(l):
             dec_act = dec_act.strip()
             l[ind] = dec_act
 
-        # for opposite,  need to complete 180 turn and then perform action
+        # for opposite, need to complete 180 turn and then perform action
         else:
             if l[-1] in set(actions.values()):
                 dec_act = (l[ind-1]+' ')*len(op) + l[-1]
