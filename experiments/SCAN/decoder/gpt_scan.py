@@ -33,6 +33,18 @@ def train(args, accelerator):
     raw_datasets['train'] = train_val_split['train']
     raw_datasets['validation'] = train_val_split['test']
 
+    column_names = raw_datasets["train"].column_names
+    input_column = column_names[0]
+    output_column = column_names[1]
+
+    # get all command tokens
+    commands = set()
+    for x in raw_datasets['train']:
+        command_strs = x[output_column].split()
+        commands.update(command_strs)
+
+
+    # TODO : add commands as new tokens? 
 
     # tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
@@ -40,26 +52,26 @@ def train(args, accelerator):
         pad_token="<pad>",
         sep_token="<sep>",
     )
+    num_added_toks = tokenizer.add_tokens(list(commands))
+    print("We have added", num_added_toks, "tokens")
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
+    # Notice: resize_token_embeddings expect to receive the full size of the new vocabulary, i.e., the length of the tokenizer.
+    model.resize_token_embeddings(len(tokenizer))
 
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
-    # preprocess dataset
-    column_names = raw_datasets["train"].column_names
-    input_column = column_names[0]
-    output_column = column_names[1]
-
+    # test tokenization
     """mlen = 0
     for sample in raw_datasets['validation']:
         input = sample[input_column]
         target = sample[output_column]
         #model_inputs = tokenizer(input, target)
-        print(tokenizer.decode(tokenizer(input+' '+tokenizer.sep_token+' ', target+' '+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
+        print(tokenizer.decode(tokenizer(input+tokenizer.sep_token, target+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
         quit()
         l = len(model_inputs['input_ids'])
         if l > mlen:
@@ -67,7 +79,7 @@ def train(args, accelerator):
     print(mlen)
     quit()"""
 
-    ## fix ##
+    # preprocess dataset
     def preprocess_function(examples):
         # commands, actions
         inputs = examples[input_column]
@@ -109,6 +121,7 @@ def train(args, accelerator):
             desc="Running tokenizer on dataset",
         )
 
+    # test preprocess function
     #print(tokenizer.decode(train_dataset[0]['input_ids'], skip_special_tokens=False))
     #quit()
 
