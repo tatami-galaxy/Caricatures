@@ -1,7 +1,6 @@
 from datasets import load_dataset
 
-# Assumptions :
-# 1. command can have at most 2 'parts' separated by either 'and' or 'after'
+# Assumptions?
 
 actions = {
     "walk": "I_WALK",
