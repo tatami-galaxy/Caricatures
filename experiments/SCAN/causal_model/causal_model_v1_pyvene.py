@@ -1,4 +1,5 @@
 from datasets import load_dataset
+from pyvene import CausalModel
 
 # Assumptions?
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
@@ -7,29 +8,104 @@ actions = {
     "walk": "I_WALK",
     "run": "I_RUN",
     "jump": "I_JUMP",
-    "look": "I_LOOK"
+    "look": "I_LOOK",
+    "turn": "",
+    # dummy placeholder to pad input
+    "": "",
     }
 
 turns = {
     "around": "yyyy",
-    "opposite": "yy"
+    "opposite": "yy",
+    # dummy placeholder to pad input
+    "": "",
 }
 
 directions = {
     "right": "I_TURN_RIGHT",
-    "left": "I_TURN_LEFT"
+    "left": "I_TURN_LEFT",
+    # dummy placeholder to pad input
+    "": "",
 }
 
 nums = {
     "twice": "xx",
-    "thrice": "xxx"
+    "thrice": "xxx",
+    # dummy placeholder to pad input
+    "": "",
 }
+
+conjs = ["and", "after"]
 
 # all mappings together 
 classes = [actions, turns, directions, nums]
 # inverted turns and directions mappings
 turns_inv = {v: k for k, v in turns.items()}
 nums_inv = {v: k for k, v in nums.items()}
+
+# causal model variables
+# longest command is 9 words : https://arxiv.org/pdf/1711.00350
+variables = [
+    # leaves
+    "act1", "trn1", "dir1", "num1",
+    "conj",
+    "act2", "trn2", "dir2", "num2",
+]
+
+# causal model functions
+functions = {
+    # leaves
+    "act1": lambda x: actions(x),
+    "act2": lambda x: actions(x),
+
+    "trn1": lambda x: turns(x),
+    "trn2": lambda x: turns(x),
+
+    "dir1": lambda x: directions(x),
+    "dir2": lambda x: directions(x),
+
+    "num1": lambda x: nums(x),
+    "num2": lambda x: nums(x),
+
+    "conj": lambda x: x,
+
+    # combining turn and and direction
+    # need to check for EMPTY
+    #"trn1_dir1": lambda t, d: 
+
+}
+
+# values of nodes
+values = {}
+values["act1"] = list(actions.values())
+values["act2"] = list(actions.values())
+
+values["trn1"] = list(turns.values())
+values["trn2"] = list(turns.values())
+
+values["dir1"] = list(directions.values())
+values["dir2"] = list(directions.values())
+
+values["num1"] = list(nums.values())
+values["num2"] = list(nums.values())
+
+values["conj"] = conjs
+
+# parents
+parents = {v:[] for v in variables}
+
+# a dictionary with nodes as keys and positions as values
+pos = {
+    "act1": (0.2, 0),
+    "trn1": (1, 0.1),
+    "dir1": (2, 0.2),
+    "num1": (2.8, 0),
+    "conj": (1, 2),
+    "act1": (0.2, 0),
+    "trn1": (1, 0.1),
+    "dir1": (2, 0.2),
+    "num1": (2.8, 0),
+}
 
 # variable binding function
 # can be separated into at least 2 steps :
@@ -149,7 +225,11 @@ if __name__ == '__main__':
 
     # TODO : what will be the format of the input to the tree? (leaves)
 
-    # longest command is 9 words : https://arxiv.org/pdf/1711.00350
+    causal_model = CausalModel(variables, values, parents, functions, pos=pos)
+    causal_model.print_structure()
+    print("Timesteps:", causal_model.timesteps)
+
+    """# longest command is 9 words : https://arxiv.org/pdf/1711.00350
     max_len = 9
     posns = {k:set() for k in list(range(9))}
     for dataset in data_splits:
@@ -157,7 +237,8 @@ if __name__ == '__main__':
             command = x['commands']
             #label = x['actions']
             words = command.split()
-            for w in range(len(words)):
-                posns[w].add(words[w])
+            if len(words) == max_len:
+                for w in range(len(words)):
+                    posns[w].add(words[w])
 
-    print(posns)
+    print(posns)"""
