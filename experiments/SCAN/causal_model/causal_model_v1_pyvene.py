@@ -4,9 +4,11 @@ import itertools
 
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
 max_len = 9
-# dummy token for formatting
+# dummy tokens for formatting
 EMPTY = "EMPTY"
+PORT = "PORT"
 
+# command type maps
 actions = {
     "walk": "I_WALK",
     "run": "I_RUN",
@@ -63,7 +65,7 @@ non_leaves = [
     "num1_res", "act1_trn1_dir1_num1",
     "trn2_res", "trn2_dir2", "act2_trn2_dir2", 
     "num2_res", "act2_trn2_dir2_num2",
-    "conj_res", "rnode"
+    "conj_left", "conj_right",
 ]
 variables = leaves + non_leaves
 
@@ -98,10 +100,29 @@ def num_function(act_trn_dir, num):
     dec = (act_trn_dir + ' ') * len(num)
     return dec.strip()
 
+def conjugation_left(act1_trn1_dir1_num1, conj):
+    if conj == EMPTY:
+        return act1_trn1_dir1_num1
+    elif conj == "and":
+        return act1_trn1_dir1_num1 + PORT
+    else:
+        return PORT + act1_trn1_dir1_num1
+    
+
+def conjugation_right(conj_left, act2_trn2_dir2_num2):
+    if act2_trn2_dir2_num2 == EMPTY:
+        return conj_left
+    # after
+    elif conj_left.startswith(PORT):
+        f_str = act2_trn2_dir2_num2 + conj_left
+    # and
+    else:
+        f_str = conj_left + act2_trn2_dir2_num2
+    return f_str.replace(PORT, ' ')
+
 functions = {
 
     # leaves
-    ## resolution later ##
     "act1": lambda x: x,
     "act2": lambda x: x,
     "trn1": lambda x: x,
@@ -132,11 +153,11 @@ functions = {
     "act1_trn1_dir1_num1": num_function,
     "act2_trn2_dir2_num2": num_function,
 
-    # conjunction resolution
-    "conj_res": lambda x: x,
+    # conj with left segment
+    "conj_left": conjugation_left,
 
-    # final output
-    "rnode": lambda x: x,
+    # conj with right segment
+    "conj_right": conjugation_right,
 }
 
 
@@ -179,6 +200,14 @@ all_act_trn_dir_num = list(itertools.product(values["act1_trn1_dir1"], values["n
 values["act1_trn1_dir1_num1"] = list(set([num_function(tup[0], tup[1]) for tup in all_act_trn_dir_num]))
 values["act2_trn2_dir2_num2"] = values["act1_trn1_dir1_num1"].copy()
 
+# conj_left
+all_conj_left = list(itertools.product(values["act1_trn1_dir1_num1"], conjs))
+values["conj_left"] = list(set([conjugation_left(tup[0], tup[1]) for tup in all_conj_left]))
+
+# conj_right
+all_conj_right = list(itertools.product(values["conj_left"], values["act2_trn2_dir2_num2"]))
+values["conj_right"] = list(set([conjugation_right(tup[0], tup[1]) for tup in all_conj_right]))
+
 
 ### PARENTS ###
 
@@ -195,6 +224,9 @@ parents["trn2_dir2"] = ["trn2_res", "dir2"]
 parents["act2_trn2_dir2"] = ["act2", "trn2_dir2"]
 parents["num2_res"] = ["num2"]
 parents["act2_trn2_dir2_num2"] = ["act2_trn2_dir2", "num2_res"]
+# merge
+parents["conj_left"] = ["act1_trn1_dir1_num1", "conj"]
+parents["conj_right"] = ["conj_left", "act2_trn2_dir2_num2"]
 
 
 ### POSITIONS ###
@@ -231,7 +263,11 @@ pos = {
     "num2_res": (9, 0.2),
     "trn2_dir2": (6.4, 0.6),
     "act2_trn2_dir2": (5.2, 1.5),
-    "act2_trn2_dir2_num2": (7.5, 1.8)
+    "act2_trn2_dir2_num2": (7.5, 1.8),
+
+    # merge
+    "conj_left": (3.5, 2.2),
+    "conj_right": (4.5, 3.2),
 }
 
 
