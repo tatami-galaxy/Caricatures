@@ -18,6 +18,13 @@ accelerate launch gpt_scan.py --model_name_or_path distilbert/distilgpt2 --outpu
 
 #### A100
 ```bash
-CUDA_VISIBLE_DEVICES=3,4,5,6 accelerate launch gpt_scan.py --model_name_or_path local_model_path --output_dir /home/ujan/Caricatures/models/scan_gpt2-large --train_steps 200000 --eval_steps 10000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 
+CUDA_VISIBLE_DEVICES=4 accelerate launch gpt_scan.py --model_name_or_path /home/ujan/LLMs/gpt2-large --local_dataset --dataset /home/ujan/Datasets/scan/scan_simple --output_dir /home/ujan/Caricatures/models/scan_gpt2-large --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 
+
+CUDA_VISIBLE_DEVICES=5 accelerate launch gpt_scan.py --model_name_or_path /home/ujan/LLMs/gpt2-medium --local_dataset --dataset /home/ujan/Datasets/scan/scan_simple --output_dir /home/ujan/Caricatures/models/scan_gpt2-medium --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 
+
+CUDA_VISIBLE_DEVICES=6 accelerate launch gpt_scan.py --model_name_or_path /home/ujan/LLMs/gpt2-large --local_dataset --dataset /home/ujan/Datasets/scan/scan_simple --add_action_tokens --output_dir /home/ujan/Caricatures/models/scan_gpt2-large --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 
+
+CUDA_VISIBLE_DEVICES=7 accelerate launch gpt_scan.py --model_name_or_path /home/ujan/LLMs/gpt2-medium --local_dataset --dataset /home/ujan/Datasets/scan/scan_simple --add_action_tokens --output_dir /home/ujan/Caricatures/models/scan_gpt2-medium --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 
+
 
 ```

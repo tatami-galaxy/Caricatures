@@ -17,15 +17,16 @@ from transformers import (
     get_scheduler, AutoModelForCausalLM
 )
 
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 
 
 def train(args, accelerator):
     
-    # `trust_remote_code` is to be used with Auto classes
-
     # get dataset
-    raw_datasets = load_dataset(args.dataset, args.dataset_config, trust_remote_code=True)
+    if args.local_dataset:
+        raw_datasets = load_from_disk(args.dataset)
+    else:
+        raw_datasets = load_dataset(args.dataset, args.dataset_config, trust_remote_code=True)
 
 
     # split train set into train and validation
@@ -49,9 +50,10 @@ def train(args, accelerator):
         pad_token="<pad>",
         sep_token="<sep>",
     )
-    # TODO : add commands as new tokens? 
-    #num_added_toks = tokenizer.add_tokens(list(commands))
-    #accelerator.print("We have added", num_added_toks, "tokens")
+    # add commands as new tokens? 
+    if args.add_action_tokens:
+        num_added_toks = tokenizer.add_tokens(list(commands))
+        accelerator.print("We have added", num_added_toks, "tokens")
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
@@ -288,6 +290,10 @@ def run():
         action="store_true",
     )
     parser.add_argument(
+        "--local_dataset",
+        action="store_true",
+    )
+    parser.add_argument(
         "--dataset",
         default="scan",
         type=str,
@@ -307,6 +313,10 @@ def run():
         type=float,
         default=0.1,
         help="The percentage of the train set used as validation set in case there's no validation split",
+    )
+    parser.add_argument(
+        "--add_action_tokens",
+        action="store_true",
     )
     parser.add_argument(
         '--max_source_length',
