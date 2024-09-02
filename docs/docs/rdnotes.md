@@ -39,4 +39,12 @@ Todo:
 - Checked install path in python with: print(pyvene.__file__)
 
 30/07/2024
-- Creating Causal Model for SCAN in Experiements>Notebooks
+- Creating Causal Model for SCAN in Experiments>Notebooks
+
+29/07/2024
+- Reading Ujan's causal model file and analysis
+- Creating new Causal Model
+
+02/09/2024
+- Read COGS Paper
+- Block: PCFG not available for causal model
