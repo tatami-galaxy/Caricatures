@@ -91,7 +91,7 @@ def train(args, accelerator):
     input_column = column_names[0]
     output_column = column_names[1]
 
-    """mlen = 0
+    mlen = 0
     for sample in raw_datasets['validation']:
         input = sample[input_column]
         target = sample[output_column]
@@ -107,9 +107,10 @@ def train(args, accelerator):
         if l > mlen:
             mlen = l
     print(mlen) # 208
-    quit()"""
+    quit()
 
 
+    ## change padding side? ##
     def preprocess_function(examples):
         # commands, actions
         inputs = examples[input_column]

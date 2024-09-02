@@ -33,6 +33,15 @@ def train(args, accelerator):
     raw_datasets['train'] = train_val_split['train']
     raw_datasets['validation'] = train_val_split['test']
 
+    column_names = raw_datasets["train"].column_names
+    input_column = column_names[0]
+    output_column = column_names[1]
+
+    # get all command tokens
+    commands = set()
+    for x in raw_datasets['train']:
+        command_strs = x[output_column].split()
+        commands.update(command_strs)
 
     # tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
@@ -40,6 +49,9 @@ def train(args, accelerator):
         pad_token="<pad>",
         sep_token="<sep>",
     )
+    # TODO : add commands as new tokens? 
+    #num_added_toks = tokenizer.add_tokens(list(commands))
+    #accelerator.print("We have added", num_added_toks, "tokens")
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
@@ -49,11 +61,7 @@ def train(args, accelerator):
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
-    # preprocess dataset
-    column_names = raw_datasets["train"].column_names
-    input_column = column_names[0]
-    output_column = column_names[1]
-
+    # test tokenization
     """mlen = 0
     for sample in raw_datasets['validation']:
         input = sample[input_column]
@@ -67,6 +75,7 @@ def train(args, accelerator):
     print(mlen)
     quit()"""
 
+    # preprocess dataset
     def preprocess_function(examples):
         # commands, actions
         inputs = examples[input_column]
@@ -107,6 +116,10 @@ def train(args, accelerator):
             load_from_cache_file=not args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
+
+    # test preprocess function
+    #print(tokenizer.decode(train_dataset[0]['input_ids'], skip_special_tokens=False))
+    #quit()
 
     # data collator and loaders
     train_dataloader = DataLoader(
@@ -240,6 +253,7 @@ def train(args, accelerator):
                     unwrapped_model.config.save_pretrained(
                         output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
                     )
+                    tokenizer.save_pretrained(output_dir)
 
                 model.train()
                 total_loss = 0
@@ -248,8 +262,6 @@ def train(args, accelerator):
 
             if global_step >= args.train_steps:
                 return
-
-
 
 
 def run():
