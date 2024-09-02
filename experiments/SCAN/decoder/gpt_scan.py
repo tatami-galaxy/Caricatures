@@ -50,13 +50,11 @@ def train(args, accelerator):
         sep_token="<sep>",
     )
     # TODO : add commands as new tokens? 
-    num_added_toks = tokenizer.add_tokens(list(commands))
-    accelerator.print("We have added", num_added_toks, "tokens")
+    #num_added_toks = tokenizer.add_tokens(list(commands))
+    #accelerator.print("We have added", num_added_toks, "tokens")
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
-    # Notice: resize_token_embeddings expect to receive the full size of the new vocabulary, i.e., the length of the tokenizer.
-    model.resize_token_embeddings(len(tokenizer))
 
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
@@ -255,6 +253,7 @@ def train(args, accelerator):
                     unwrapped_model.config.save_pretrained(
                         output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
                     )
+                    tokenizer.save_pretrained(output_dir)
 
                 model.train()
                 total_loss = 0
