@@ -1,6 +1,7 @@
 from datasets import load_dataset
 from pyvene import CausalModel
 import itertools
+from tqdm.auto import tqdm
 
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
 max_len = 9
@@ -89,7 +90,7 @@ def turn_function(turn, dir):
 def action_function(act, trn_dir):
     if trn_dir == EMPTY:
         return actions[act]
-    return trn_dir.replace('act', actions[act])
+    return trn_dir.replace('act', actions[act]).strip()
 
 def resolve_num(num):
     return nums[num]
@@ -111,14 +112,17 @@ def conjugation_left(act1_trn1_dir1_num1, conj):
 
 def conjugation_right(conj_left, act2_trn2_dir2_num2):
     if act2_trn2_dir2_num2 == EMPTY:
-        return conj_left
+        f_str = conj_left
     # after
     elif conj_left.startswith(PORT):
         f_str = act2_trn2_dir2_num2 + conj_left
     # and
     else:
         f_str = conj_left + act2_trn2_dir2_num2
-    return f_str.replace(PORT, ' ')
+    f_str = f_str.replace(PORT, ' ')
+    f_str = f_str.replace((' '+EMPTY+' '), ' ')
+    f_str = f_str.replace(EMPTY, '')
+    return f_str.strip()
 
 functions = {
 
@@ -239,14 +243,14 @@ pos = {
     "trn1": (2, 0),
     "dir1": (1.9, 0.05),
     "num1": (4, 0),
-    "conj": (1, 2),
+    "conj": (4.11, 0.1),
     "act1": (0.2, 0),
     "trn1": (1, 0.1),
-    "trn1_res": (1, 0.4),
+    "trn1_res": (1.33, 0.4),
     "dir1": (2, 0.3),
     "num1": (2.8, 0),
     "num1_res": (3, 0.2),
-    "trn1_dir1": (1.4, 0.6),
+    "trn1_dir1": (1.4, 0.96),
     "act1_trn1_dir1": (0.2, 1.5),
     "act1_trn1_dir1_num1": (2.5, 1.8),
 
@@ -261,7 +265,7 @@ pos = {
     "dir2": (7, 0.3),
     "num2": (9.8, 0),
     "num2_res": (9, 0.2),
-    "trn2_dir2": (6.4, 0.6),
+    "trn2_dir2": (6.4, 1),
     "act2_trn2_dir2": (5.2, 1.5),
     "act2_trn2_dir2_num2": (7.5, 1.8),
 
@@ -273,7 +277,7 @@ pos = {
 
 if __name__ == '__main__':
 
-    """scan_simple = load_dataset('scan', 'simple', trust_remote_code=True)
+    scan_simple = load_dataset('scan', 'simple', trust_remote_code=True)
     scan_length = load_dataset('scan', 'length', trust_remote_code=True)
 
     simple_train = scan_simple['train']
@@ -281,35 +285,42 @@ if __name__ == '__main__':
     length_train = scan_length['train']
     length_test = scan_length['test']
 
-    data_splits = [simple_train, simple_test, length_train, length_test]"""
-
-    # TODO : Test both parts together
-
-    #command = "walk opposite left"
-    #command = "walk after run around right twice"
-    command = "run opposite left after walk right"
-    command = command.split()
-    padded_command = []
-    index = 0
-    c = 0
-    while index < max_len:
-        expected_cs = command_structure[index]
-        if c < len(command) and command[c] in expected_cs:
-            padded_command.append(command[c])
-            c += 1
-        else:
-            padded_command.append(EMPTY)
-        index += 1
+    data_splits = [simple_train, simple_test, length_train, length_test]
+    total_len = sum([len(s) for s in data_splits])
 
     causal_model = CausalModel(variables, values, parents, functions, pos=pos)
     #causal_model.print_structure()
     #print("Timesteps:", causal_model.timesteps)
     #quit()
 
-    causal_model_inputs = {leaves[i]:padded_command[i] for i in range(max_len)}
-    #print(causal_model_inputs)
-    #quit()
+    accuracy = 0
+    bar = tqdm(range(total_len))
+    for dataset in data_splits:
+        for x in dataset:
+            command_str = x['commands']
+            label = x['actions']
+            
+            command = command_str.split()
+            padded_command = []
+            index = 0
+            c = 0
+            while index < max_len:
+                expected_cs = command_structure[index]
+                if c < len(command) and command[c] in expected_cs:
+                    padded_command.append(command[c])
+                    c += 1
+                else:
+                    padded_command.append(EMPTY)
+                index += 1
 
-    setting = causal_model.run_forward(causal_model_inputs)
-    #print(setting)
-    causal_model.print_setting(setting)
+            causal_model_inputs = {leaves[i]:padded_command[i] for i in range(max_len)}
+            setting = causal_model.run_forward(causal_model_inputs)
+            if label==setting['conj_right']:
+                accuracy += 1
+            else:
+                print(command_str)
+                print(setting)
+                quit()
+            bar.update(1)
+
+    print('accuracy on simple and length splits : {}'.format(accuracy/total_len))
