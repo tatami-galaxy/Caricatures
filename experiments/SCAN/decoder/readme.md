@@ -7,7 +7,8 @@ accelerate launch gemma_scan.py --output_dir /home/drdo/Caricatures/models/scan_
 accelerate launch gpt_scan.py --output_dir /home/drdo/Caricatures/models/scan_gpt2 --lr 1e-3
 
 accelerate launch gpt_scan.py --model_name_or_path openai-community/gpt2 --output_dir /root/Caricatures/models/scan_gpt2 --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8
-accelerate launch gpt_scan.py --model_name_or_path openai-community/gpt2 --output_dir /home/drdo/Caricatures/models/scan_gpt2 --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8
+accelerate launch gpt_scan.py --model_name_or_path openai-community/gpt2 --output_dir /home/drdo/Caricatures/models/scan_gpt2 --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 
+accelerate launch gpt_scan.py --model_name_or_path openai-community/gpt2 --output_dir /home/drdo/Caricatures/models/scan_dummy_tokens_gpt2 --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 --add_dummy_tokens
 
 accelerate launch gpt_scan.py --model_name_or_path openai-community/gpt2-large --output_dir /home/drdo/Caricatures/models/scan_gpt2-large --train_steps 200000 --eval_steps 10000 --per_device_train_batch_size 2 --per_device_eval_batch_size 2 --lr 1e-3
 accelerate launch gpt_scan.py --model_name_or_path openai-community/gpt2-medium --output_dir /home/drdo/Caricatures/models/scan_gpt2-medium --train_steps 100000 --eval_steps 5000 --per_device_train_batch_size 8 --per_device_eval_batch_size 8 

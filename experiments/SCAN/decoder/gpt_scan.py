@@ -10,17 +10,68 @@ from accelerate.utils import set_seed
 import torch
 from torch.utils.data import DataLoader
 
-import evaluate
-
 from transformers import (
-    AutoTokenizer, default_data_collator, DataCollatorWithPadding,
+    AutoTokenizer, default_data_collator,
     get_scheduler, AutoModelForCausalLM
 )
 
 from datasets import load_dataset, load_from_disk
 
+# Longest command is 9 words : https://arxiv.org/pdf/1711.00350
+max_len = 9
+dummy_token = "<empty>"
+
+# command type maps
+actions = {
+    "walk": "I_WALK",
+    "run": "I_RUN",
+    "jump": "I_JUMP",
+    "look": "I_LOOK",
+    "turn": dummy_token,
+    dummy_token: dummy_token,
+    }
+
+turns = {
+    "around": "yyyy",
+    "opposite": "yy",
+    dummy_token: dummy_token
+}
+
+directions = {
+    "right": "I_TURN_RIGHT",
+    "left": "I_TURN_LEFT",
+    dummy_token: dummy_token
+}
+
+nums = {
+    "twice": "xx",
+    "thrice": "xxx",
+    dummy_token: dummy_token
+}
+
+conjs = ["and", "after", dummy_token]
+
+# command structure
+command_structure = {
+    0: actions,
+    1: turns,
+    2: directions,
+    3: nums,
+    4: conjs,
+    5: actions,
+    6: turns,
+    7: directions,
+    8: nums,
+}
+
 
 def train(args, accelerator):
+
+    # tokenizer special tokens
+    special_tokens_dict = {
+        "pad_token": "<pad>",
+        "sep_token": "<sep>",
+    }
     
     # get dataset
     if args.local_dataset:
@@ -38,44 +89,66 @@ def train(args, accelerator):
     input_column = column_names[0]
     output_column = column_names[1]
 
-    # get all command tokens
-    commands = set()
-    for x in raw_datasets['train']:
-        command_strs = x[output_column].split()
-        commands.update(command_strs)
+    # format dataset with dummy tokens
+    if args.add_dummy_tokens:
+
+        special_tokens_dict["additional_special_tokens"] = [dummy_token]
+
+        def add_empty_token(x):
+            command_str = x[input_column]
+            command = command_str.split()
+            padded_command = []
+            index = 0
+            c = 0
+            while index < max_len:
+                expected_cs = command_structure[index]
+                if c < len(command) and command[c] in expected_cs:
+                    padded_command.append(command[c])
+                    c += 1
+                else:
+                    padded_command.append(dummy_token)
+                index += 1
+            
+            x[input_column] = ' '.join(padded_command)
+            return x
+        
+        with accelerator.main_process_first():
+            raw_datasets["train"] = raw_datasets["train"].map(
+                add_empty_token,
+                batched=False,
+                num_proc=args.num_workers,  # set as 1 for testing, otherwise args.num_workers,
+                load_from_cache_file=not args.overwrite_cache,
+                desc="Running tokenizer on dataset",
+            )
+            raw_datasets["validation"] = raw_datasets["validation"].map(
+                add_empty_token,
+                batched=False,
+                num_proc=args.num_workers,
+                load_from_cache_file=not args.overwrite_cache,
+                desc="Running tokenizer on dataset",
+        )
 
     # tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name_or_path,
-        pad_token="<pad>",
-        sep_token="<sep>",
-    )
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path,)
+    tokenizer.add_special_tokens(special_tokens_dict)
+    
     # add commands as new tokens? 
     if args.add_action_tokens:
+        # get all command tokens
+        commands = set()
+        for x in raw_datasets['train']:
+            command_strs = x[output_column].split()
+            commands.update(command_strs)
+
         num_added_toks = tokenizer.add_tokens(list(commands))
         accelerator.print("We have added", num_added_toks, "tokens")
 
     # model
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path,)
-
     # resize the embeddings when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
-
-    # test tokenization
-    """mlen = 0
-    for sample in raw_datasets['validation']:
-        input = sample[input_column]
-        target = sample[output_column]
-        #model_inputs = tokenizer(input, target)
-        print(tokenizer.decode(tokenizer(input+tokenizer.sep_token, target+tokenizer.eos_token)['input_ids'], skip_special_tokens=False))
-        quit()
-        l = len(model_inputs['input_ids'])
-        if l > mlen:
-            mlen = l
-    print(mlen)
-    quit()"""
 
     # preprocess dataset
     def preprocess_function(examples):
@@ -83,8 +156,7 @@ def train(args, accelerator):
         inputs = examples[input_column]
         targets = examples[output_column]
 
-        # tokenize as single sequence separated by special token (<bos>)
-        # padding = False by default
+        # tokenize as single sequence separated by special token
         model_inputs = tokenizer(
             [i+tokenizer.sep_token for i in inputs],
             [t+tokenizer.eos_token for t in targets],
@@ -105,7 +177,7 @@ def train(args, accelerator):
             preprocess_function,
             batched=True,
             #batch_size=4, # for testing
-            num_proc=args.num_workers,  # set as 1 for testing, otherwise args.num_workers,
+            num_proc=args.num_workers,
             remove_columns=column_names,
             load_from_cache_file=not args.overwrite_cache,
             desc="Running tokenizer on dataset",
@@ -120,7 +192,7 @@ def train(args, accelerator):
         )
 
     # test preprocess function
-    #print(tokenizer.decode(train_dataset[0]['input_ids'], skip_special_tokens=False))
+    #print(tokenizer.decode(train_dataset[1]['input_ids'], skip_special_tokens=False))
     #quit()
 
     # data collator and loaders
@@ -316,6 +388,10 @@ def run():
     )
     parser.add_argument(
         "--add_action_tokens",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--add_dummy_tokens",
         action="store_true",
     )
     parser.add_argument(
