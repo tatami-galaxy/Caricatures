@@ -38,6 +38,8 @@ def train(args, accelerator):
     config = T5Config.from_pretrained(args.model_name_or_path, trust_remote_code=True)
     tokenizer = T5Tokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
 
+    # add special tokens here
+
     if args.from_scratch:
         model = T5ForConditionalGeneration(config=config)
     else:
@@ -277,6 +279,7 @@ def train(args, accelerator):
                     unwrapped_model.config.save_pretrained(
                         output_dir, is_main_process=accelerator.is_main_process, save_function=accelerator.save
                     )
+                    tokenizer.save_pretrained(output_dir)
                     generation_config.save_pretrained(output_dir)
 
                 model.train()

@@ -29,13 +29,9 @@ def train(args, accelerator):
     raw_datasets = load_dataset(
         args.dataset, args.dataset_config, trust_remote_code=True)
 
-    # load pretrained model or initialize from scratch. Load tokenizer
-    config = AutoConfig.from_pretrained(
-        args.model_name_or_path, trust_remote_code=True)
-    generation_config = GenerationConfig.from_pretrained(
-        args.model_name_or_path)
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name_or_path, trust_remote_code=True)
+    config = AutoConfig.from_pretrained(args.checkpoint)
+    generation_config = GenerationConfig.from_pretrained(args.checkpoint)
+    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
 
     model = AutoModelForSeq2SeqLM.from_pretrained(args.checkpoint, config=config)
 

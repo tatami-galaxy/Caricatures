@@ -132,7 +132,7 @@ def train(args, accelerator):
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path,)
     tokenizer.add_special_tokens(special_tokens_dict)
     
-    # add commands as new tokens? 
+    # add commands as new tokens? -> not needed
     if args.add_action_tokens:
         # get all command tokens
         commands = set()
