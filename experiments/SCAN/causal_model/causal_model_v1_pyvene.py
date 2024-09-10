@@ -6,8 +6,8 @@ from tqdm.auto import tqdm
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
 max_len = 9
 # dummy tokens for formatting
-EMPTY = "EMPTY" # "<empty>""
-PORT = "PORT"
+EMPTY = "<empty>" # "<empty>"
+PORT = "<port>"
 
 # command type maps
 actions = {
