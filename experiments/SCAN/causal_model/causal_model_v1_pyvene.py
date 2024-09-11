@@ -6,8 +6,9 @@ from tqdm.auto import tqdm
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
 max_len = 9
 # dummy tokens for formatting
-EMPTY = "<empty>" # "<empty>"
+EMPTY = "<empty>"  # "EMPTY"
 PORT = "<port>"
+ACT = "<act>"
 
 # command type maps
 actions = {
@@ -75,31 +76,36 @@ variables = leaves + non_leaves
 def resolve_turn(turn):
     return turns[turn]
 
+# need to represent ACT differently?
 def turn_function(turn, dir):
     dir = directions[dir]
     if dir == EMPTY:
         return EMPTY
     elif turn == EMPTY:
-        dec_act = dir + ' act '
+        dec_act = dir + ' '+ACT+' '
     elif turn == "yyyy":
-        dec_act = (dir + ' act ')*len(turn) 
+        dec_act = (dir + ' '+ACT+' ')*len(turn)
     else:
-        dec_act = (dir + ' ')*len(turn) + 'act'
+        dec_act = (dir + ' ')*len(turn) + ACT
     return dec_act.strip()
+
 
 def action_function(act, trn_dir):
     if trn_dir == EMPTY:
         return actions[act]
-    return trn_dir.replace('act', actions[act]).strip()
+    return (trn_dir.replace(ACT, actions[act])).strip()
+
 
 def resolve_num(num):
     return nums[num]
+
 
 def num_function(act_trn_dir, num):
     if num == EMPTY:
         return act_trn_dir
     dec = (act_trn_dir + ' ') * len(num)
     return dec.strip()
+
 
 def conjugation_left(act1_trn1_dir1_num1, conj):
     if conj == EMPTY:
@@ -108,7 +114,7 @@ def conjugation_left(act1_trn1_dir1_num1, conj):
         return act1_trn1_dir1_num1 + PORT
     else:
         return PORT + act1_trn1_dir1_num1
-    
+
 
 def conjugation_right(conj_left, act2_trn2_dir2_num2):
     if act2_trn2_dir2_num2 == EMPTY:
@@ -123,6 +129,7 @@ def conjugation_right(conj_left, act2_trn2_dir2_num2):
     f_str = f_str.replace((' '+EMPTY+' '), ' ')
     f_str = f_str.replace(EMPTY, '')
     return f_str.strip()
+
 
 functions = {
 
