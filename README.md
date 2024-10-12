@@ -7,3 +7,16 @@
 Compositionality And Reasoning in Cognitive ArchitecTURES 
 
 Collaboration: Ruchira Dhar and Ujan Deb
+
+#### Setup
+
+``` 
+git clone https://github.com/tatami-galaxy/Caricatures.git
+cd Caricatures
+python repo_setup.py
+accelerate config
+cd ..
+git clone https://github.com/tatami-galaxy/pyvene.git
+cd pyvene
+pip install .
+```

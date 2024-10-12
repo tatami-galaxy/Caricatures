@@ -4,7 +4,10 @@ import subprocess
 
 def main():
 
-    req = ['transformers', 'datasets', 'accelerate', 'evaluate', 'tensorboard']
+    req = [
+        'transformers', 'datasets', 'accelerate',
+        'evaluate', 'tensorboard', 'nnsight'
+    ]
 
 
     # directorries
