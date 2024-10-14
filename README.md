@@ -15,12 +15,14 @@ git clone https://github.com/tatami-galaxy/Caricatures.git
 cd Caricatures
 python repo_setup.py
 
-accelerate config
-
 cd ..
 git clone https://github.com/tatami-galaxy/pyvene.git
 cd pyvene
 pip install .
+
+accelerate config
+
+wandb login
 
 curl https://rclone.org/install.sh
 bash

@@ -6,7 +6,7 @@ def main():
 
     req = [
         'transformers', 'datasets', 'accelerate',
-        'evaluate', 'tensorboard', 'nnsight'
+        'evaluate', 'tensorboard', 'nnsight', 'wandb',
     ]
 
 
