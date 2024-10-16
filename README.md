@@ -23,7 +23,9 @@ pip install .
 accelerate config
 
 wandb login
+hugginface-cli login
 
 curl https://rclone.org/install.sh
 bash
+rclone config
 ```
