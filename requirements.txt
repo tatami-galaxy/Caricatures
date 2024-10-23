@@ -3,3 +3,6 @@ datasets
 accelerate
 evaluate
 tensorboard
+nnsight
+wandb
+trl
