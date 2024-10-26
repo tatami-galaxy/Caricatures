@@ -18,9 +18,9 @@ from transformers import (
 
 from datasets import load_dataset
 
-from rouge_score import rouge_scorer
-
 import scan_constants
+from rl_trainers import PPOTrainer
+
 
 def train(args, accelerator):
     
@@ -141,16 +141,21 @@ def train(args, accelerator):
 
     # main dataloaders
     train_dataloader = DataLoader(
-        train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.batch_size
+        train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.mini_batch_size
     )
     eval_dataloader = DataLoader(
-        eval_dataset, collate_fn=default_data_collator, batch_size=args.batch_size
+        eval_dataset, collate_fn=default_data_collator, batch_size=args.mini_batch_size
     ) 
     # prepare main dataloaders
     train_dataloader, eval_dataloader = accelerator.prepare(train_dataloader, eval_dataloader)
 
     # TODO: define ppo trainer
-
+    ppo_trainer = PPOTrainer(
+        model=model,
+        tokenizer=tokenizer,
+        accelerator=accelerator,
+        max_length=args.max_input_length
+    )
 
     # train
     global_step = 0  # tracks total steps
@@ -159,9 +164,35 @@ def train(args, accelerator):
     eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 
     while True:
-        for batch in train_dataloader:
-            pass
+        model.train()
 
+        # sample batch : need to do iteratively for large batch sizes
+
+        for batch in train_dataloader:
+            with torch.no_grad():
+                output_ids = accelerator.unwrap_model(model).generate(
+                    **batch,
+                    generation_config=generation_config,
+                    **gen_kwargs
+                )
+            # gather from accelerator
+            output_ids = accelerator.gather(
+                accelerator.pad_across_processes(output_ids, dim=1, pad_index=tokenizer.pad_token_id)
+            )
+            label_ids = accelerator.gather(
+                accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
+            )
+            print(output_ids)
+            quit()
+
+        
+        # compute rewards
+
+        # loop
+        
+        #   sample minibatch
+
+        #   update policy
 
 
 def run():
@@ -174,18 +205,10 @@ def run():
         type=int,
     )
     parser.add_argument(
-        "--model_name_or_path",
-        default='google-t5/t5-base', # gp2, gemma
+        "--model_checkpoint",
+        default=None,
         type=str,
-        help="Path to pretrained model or model identifier from huggingface.co/models",
-    )
-    parser.add_argument(
-        "--overwrite_cache",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--padding",
-        action="store_true",
+        help="Path to partially or fully trained model",
     )
     parser.add_argument(
         "--dataset",
@@ -209,36 +232,20 @@ def run():
         help="The percentage of the train set used as validation set in case there's no validation split",
     )
     parser.add_argument(
-        "--source_prefix",
-        default="",
-        type=str,
+        '--max_input_length',
+        type=int,
+        default=512
     )
     parser.add_argument(
-        '--max_source_length',
+        '--max_gen_length',
         type=int,
-        default=1024
-    )
-    parser.add_argument(
-        '--max_target_length',
-        type=int,
-        default=1024
+        default=512
     )
     parser.add_argument(
         "--output_dir",
-        default='/users/ujan/caricatures/models/scan_t5-base/',
-        type=str,
-        help="The output directory where the model checkpoints and predictions will be written.",
-    )
-    parser.add_argument(
-        "--resume_from_checkpoint",
         default=None,
         type=str,
-        help="checkpoint directory to load model from",
-    )
-    parser.add_argument(
-        "--skip_steps",
-        action="store_true",
-        help="whether to skip steps in dataloader (checkpoint)"
+        help="The output directory where the model checkpoints and predictions will be written.",
     )
     parser.add_argument(
         '--num_workers',
@@ -247,23 +254,18 @@ def run():
         help="The number of processes to use for the preprocessing."
     )
     parser.add_argument(
-        "--per_device_train_batch_size",
-        default=16,
+        "--sample_size",
+        default=512,
         type=int,
     )
     parser.add_argument(
-        "--per_device_eval_batch_size",
+        "--mini_batch_size",
         default=16,
         type=int,
     )
     parser.add_argument(
         "--train_steps",
-        default=100000,
-        type=int,
-    )
-    parser.add_argument(
-        "--warmup_steps",
-        default=0,
+        default=10000,
         type=int,
     )
     parser.add_argument(
@@ -273,18 +275,13 @@ def run():
     )
     parser.add_argument(
         "--eval_steps",
-        default=5000,
+        default=100,
         type=int,
     )
     parser.add_argument(
-        "--from_scratch",
-        action="store_true",
-    )
-    parser.add_argument(
         "--lr",
-        default=5e-5, # 1e-5, 2e-3, 2e-5
-        type=float,
-        help="Learning rate to use. From scratch training is quite sensitive to the learning rate."
+        default=5e-5, 
+        type=float
     )
     parser.add_argument(
         "--weight_decay",
@@ -299,7 +296,7 @@ def run():
     )
     parser.add_argument(
         "--mixed_precision", # choose from no, fp16, bf16 or fp8
-        default='fp16',
+        default='no',
         type=str,
     )
     parser.add_argument(
@@ -330,7 +327,7 @@ def run():
         "lr": args.lr,
         "train_steps": args.train_steps,
         "seed": args.seed,
-        "batch_size": args.batch_size,
+        "sample_size": args.sample_size,
         "mini_batch_size": args.mini_batch_size,
         "max_input_length": args.max_input_length,
         "max_gen_length": args.max_gen_length,

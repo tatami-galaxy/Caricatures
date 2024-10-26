@@ -7,9 +7,9 @@ class RLTrainer:
     def __init__(
             self,
             model,
-            ref_model,
             tokenizer,
             max_input_length,
+            ref_model=None,
             ignore_index=-100,
     ):
         self.ref_model = ref_model
@@ -69,25 +69,21 @@ class PPOTrainer(RLTrainer):
     def __init__(
             self,
             model,
-            ref_model,
             tokenizer,
-            train_dataloader,
-            eval_dataloader,
             accelerator,
             max_length,
+            ref_model=None,
             ignore_index=-100,
         ):
         super().__init__(
-            ref_model,
             model,
             tokenizer,
             max_length,
+            ref_model=None,
             ignore_index=-100,
         )
         self.optimizer = None
         self.scheduler = None
-        self.train_dataloader = train_dataloader
-        self.eval_dataloader = eval_dataloader
 
 
     # sample batch
