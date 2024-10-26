@@ -139,13 +139,23 @@ def train(args, accelerator):
         )
 
 
-    # main dataloaders
+    # dataloaders
+    # drop_last=True to make sure each PPO loop has same number of samples
     train_dataloader = DataLoader(
-        train_dataset, shuffle=True, collate_fn=default_data_collator, batch_size=args.mini_batch_size
+        train_dataset,
+        shuffle=True,
+        collate_fn=default_data_collator,
+        batch_size=args.mini_batch_size,
+        drop_last=True,
     )
     eval_dataloader = DataLoader(
-        eval_dataset, collate_fn=default_data_collator, batch_size=args.mini_batch_size
-    ) 
+        eval_dataset,
+        shuffle=True,
+        collate_fn=default_data_collator,
+        batch_size=args.mini_batch_size,
+        drop_last=True,
+    )
+
     # prepare
     model, train_dataloader, eval_dataloader = accelerator.prepare(model, train_dataloader, eval_dataloader)
 
@@ -159,6 +169,8 @@ def train(args, accelerator):
 
     # train
     global_step = 0  # tracks total steps
+    # number of mini batches in a sample
+    num_batches = args.sample_size / args.mini_batch_size
     progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
     # eval bar
     eval_bar = tqdm(range(len(eval_dataloader)), position=1)
@@ -167,7 +179,8 @@ def train(args, accelerator):
         model.train()
 
         # sample batch : need to do iteratively for large batch sizes
-
+        output_list = []
+        label_list = []
         for batch in train_dataloader:
             with torch.no_grad():
                 output_ids = accelerator.unwrap_model(model).generate(
@@ -182,7 +195,21 @@ def train(args, accelerator):
             label_ids = accelerator.gather(
                 accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
             )
-            print(output_ids)
+            output_list.append(output_ids)
+            label_list.append(label_ids)
+
+            # keep sampling until sample_size is reached
+            if len(output_list) < num_batches: continue
+
+            # re-tokenize to right padding for forward pass
+            generated_ids, attention_mask, gen_label_ids, context_label_ids = ppo_trainer.prepare_input_for_rl_step(
+                output_ids, label_ids, device=model.device
+            )
+
+            print(generated_ids.shape)
+            print(attention_mask.shape)
+            print(gen_label_ids.shape)
+            print(context_label_ids.shape)
             quit()
 
         
@@ -239,7 +266,7 @@ def run():
     parser.add_argument(
         '--max_gen_length',
         type=int,
-        default=512
+        default=256
     )
     parser.add_argument(
         "--output_dir",
@@ -310,6 +337,9 @@ def run():
 
     # set seed
     set_seed(args.seed)
+
+    if args.sample_size / args.mini_batch_size != 0:
+        raise ValueError('sample size must be divisible by mini_batch_size') 
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)

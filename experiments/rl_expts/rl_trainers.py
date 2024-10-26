@@ -20,7 +20,7 @@ class RLTrainer:
 
 
     # re-tokenize left padded sequences need for batch generation to right padded sequences
-    def re_tokenize(self, token_ids):
+    def re_tokenize(self, token_ids, device='cpu'):
         tokens = self.tokenizer.batch_decode(token_ids, skip_special_tokens=False)
         tokens = [o.replace(self.tokenizer.pad_token, '') for o in tokens]
         tokens = [o.replace(self.tokenizer.eos_token, '') for o in tokens]
@@ -29,7 +29,7 @@ class RLTrainer:
             padding='max_length',
             max_length=self.max_input_length,
             return_tensors='pt',
-        ).to(self.model.device)
+        ).to(device)
         input_ids = tokenized_tokens['input_ids']
         attention_mask = tokenized_tokens['attention_mask']
         return input_ids, attention_mask
