@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from transformers import (
     AutoTokenizer, default_data_collator,
     get_scheduler, AutoModelForCausalLM,
+    AutoModelForCausalLMWithValueHead,
     AutoConfig, GenerationConfig,
 )
 
@@ -80,7 +81,7 @@ def train(args, accelerator):
     # LEFT PADDING FOR BATCH GENARATION
     tokenizer.padding_side = "left"
 
-    model = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLMWithValueHead.from_pretrained(
                 args.model_checkpoint,
                 config=config,
                 trust_remote_code=True,
@@ -207,9 +208,7 @@ def train(args, accelerator):
             if len(output_list) < num_batches: continue
 
             # re-tokenize to right padding for forward pass
-            # TODO: modify to handle list of tensors
             rl_inputs = ppo_trainer.prepare_input_for_rl_step(output_list, label_list, device=model.device)
-
             print(rl_inputs['generated_ids_list'])
             quit()
 
