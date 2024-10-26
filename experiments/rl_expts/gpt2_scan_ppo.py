@@ -146,8 +146,8 @@ def train(args, accelerator):
     eval_dataloader = DataLoader(
         eval_dataset, collate_fn=default_data_collator, batch_size=args.mini_batch_size
     ) 
-    # prepare main dataloaders
-    train_dataloader, eval_dataloader = accelerator.prepare(train_dataloader, eval_dataloader)
+    # prepare
+    model, train_dataloader, eval_dataloader = accelerator.prepare(model, train_dataloader, eval_dataloader)
 
     # TODO: define ppo trainer
     ppo_trainer = PPOTrainer(
