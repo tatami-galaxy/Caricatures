@@ -13,7 +13,6 @@ import torch.nn.functional as F
 from transformers import (
     AutoTokenizer, default_data_collator,
     get_scheduler, AutoModelForCausalLM,
-    AutoModelForCausalLMWithValueHead,
     AutoConfig, GenerationConfig,
 )
 
@@ -21,6 +20,8 @@ from datasets import load_dataset
 
 import scan_constants
 from rl_trainers import PPOTrainer
+
+from trl import AutoModelForCausalLMWithValueHead
 
 
 def train(args, accelerator):
@@ -81,7 +82,7 @@ def train(args, accelerator):
     # LEFT PADDING FOR BATCH GENARATION
     tokenizer.padding_side = "left"
 
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
                 args.model_checkpoint,
                 config=config,
                 trust_remote_code=True,
@@ -91,6 +92,8 @@ def train(args, accelerator):
     embedding_size = model.get_input_embeddings().weight.shape[0]
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
+
+    model = AutoModelForCausalLMWithValueHead(model)
 
     # Generation config
     generation_config = GenerationConfig.from_pretrained(args.model_checkpoint)
