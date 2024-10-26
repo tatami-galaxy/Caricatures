@@ -200,6 +200,12 @@ def train(args, accelerator):
 
             # keep sampling until sample_size is reached
             if len(output_list) < num_batches: continue
+            else:
+                output_ids = torch.vstack(output_list)
+                label_ids = torch.vstack(label_list)
+            print(output_ids.shape)
+            print(label_ids.shape)
+            quit()
 
             # re-tokenize to right padding for forward pass
             generated_ids, attention_mask, gen_label_ids, context_label_ids = ppo_trainer.prepare_input_for_rl_step(
