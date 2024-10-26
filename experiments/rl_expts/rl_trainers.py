@@ -36,28 +36,44 @@ class RLTrainer:
 
 
     # re-tokenize, set padding
-    def prepare_input_for_rl_step(self, output_ids, gen_label_ids):
-        generated_ids, attention_mask = self.re_tokenize(output_ids)
-        gen_label_ids, _ = self.re_tokenize(gen_label_ids) 
-        # context labels needed for ce loss for context
-        # get only context labels
-        all_tokens = self.tokenizer.batch_decode(generated_ids)
-        context_tokens = [t.split(self.tokenizer.sep_token)[0] for t in all_tokens]
-        tokenized_context = self.tokenizer(
-            [c+self.tokenizer.sep_token for c in context_tokens],
-            padding='max_length',
-            max_length=self.max_input_length,
-            return_tensors='pt',
-        ).to(self.model.device)
-        context_label_ids = tokenized_context['input_ids']
-        # set context label padding to -100 
-        context_label_ids = [
-            [
-                (l if l != self.tokenizer.pad_token_id else self.ignore_index) for l in label
-            ] for label in context_label_ids.tolist()
-        ]
-        context_label_ids = torch.tensor(context_label_ids).to(self.model.device)
-        return generated_ids, attention_mask, gen_label_ids, context_label_ids
+    def prepare_input_for_rl_step(self, output_list, gen_label_list, device='cpu'):
+        # generated_ids -> context ids + generated action ids
+        # attention mask -> attention mask for generated_ids
+        # gen_label_ids -> generated action ids
+        # context_label_ids -> context ids, needed to compute ce loss for context
+        rl_inputs = {
+            'generated_ids_list': [],
+            'attention_mask_list': [],
+            'gen_label_ids_list': [],
+            'context_label_ids_list': [],
+        }
+        for l in range(len(output_list)):
+            generated_ids, attention_mask = self.re_tokenize(output_list[l], device)
+            gen_label_ids, _ = self.re_tokenize(gen_label_list[l]) 
+            # context labels needed for ce loss for context
+            # get only context labels
+            all_tokens = self.tokenizer.batch_decode(generated_ids)
+            context_tokens = [t.split(self.tokenizer.sep_token)[0] for t in all_tokens]
+            tokenized_context = self.tokenizer(
+                [c+self.tokenizer.sep_token for c in context_tokens],
+                padding='max_length',
+                max_length=self.max_input_length,
+                return_tensors='pt',
+            ).to(device)
+            context_label_ids = tokenized_context['input_ids']
+            # set context label padding to -100 
+            context_label_ids = [
+                [
+                    (l if l != self.tokenizer.pad_token_id else self.ignore_index) for l in label
+                ] for label in context_label_ids.tolist()
+            ]
+            context_label_ids = torch.tensor(context_label_ids).to(device)
+            # collect into dict
+            rl_inputs['generated_ids_list'].append(generated_ids)
+            rl_inputs['attention_mask_list'].append(attention_mask)
+            rl_inputs['gen_label_ids_list'].append(gen_label_ids)
+            rl_inputs['context_label_ids_list'].append(context_label_ids)
+        return rl_inputs
 
 
 class ReinforceTrainer(RLTrainer):

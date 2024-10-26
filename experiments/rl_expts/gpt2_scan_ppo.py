@@ -159,7 +159,7 @@ def train(args, accelerator):
     # prepare
     model, train_dataloader, eval_dataloader = accelerator.prepare(model, train_dataloader, eval_dataloader)
 
-    # TODO: define ppo trainer
+    # ppo trainer
     ppo_trainer = PPOTrainer(
         model=model,
         tokenizer=tokenizer,
@@ -179,6 +179,7 @@ def train(args, accelerator):
         model.train()
 
         # sample batch : need to do iteratively for large batch sizes
+        # cant stack them, different sized outptus
         output_list = []
         label_list = []
         for batch in train_dataloader:
@@ -200,24 +201,15 @@ def train(args, accelerator):
 
             # keep sampling until sample_size is reached
             if len(output_list) < num_batches: continue
-            else:
-                output_ids = torch.vstack(output_list)
-                label_ids = torch.vstack(label_list)
-            print(output_ids.shape)
-            print(label_ids.shape)
-            quit()
 
             # re-tokenize to right padding for forward pass
-            generated_ids, attention_mask, gen_label_ids, context_label_ids = ppo_trainer.prepare_input_for_rl_step(
-                output_ids, label_ids, device=model.device
-            )
+            # TODO: modify to handle list of tensors
+            rl_inputs = ppo_trainer.prepare_input_for_rl_step(output_list, label_list, device=model.device)
 
-            print(generated_ids.shape)
-            print(attention_mask.shape)
-            print(gen_label_ids.shape)
-            print(context_label_ids.shape)
+            print(rl_inputs['generated_ids_list'])
             quit()
 
+        # forward pass with generated ids
         
         # compute rewards
 
@@ -344,7 +336,7 @@ def run():
     # set seed
     set_seed(args.seed)
 
-    if args.sample_size / args.mini_batch_size != 0:
+    if args.sample_size % args.mini_batch_size != 0:
         raise ValueError('sample size must be divisible by mini_batch_size') 
 
     if not os.path.isdir(args.output_dir):
