@@ -156,6 +156,10 @@ def train(args, accelerator):
         drop_last=True,
     )
 
+    # CHANGE TO RIGHT PADDING (in re-tokenize) FOR FORWARD
+    # dataset already left padded for batch generation
+    tokenizer.padding_side = "right"
+
     # prepare
     model, train_dataloader, eval_dataloader = accelerator.prepare(model, train_dataloader, eval_dataloader)
 
