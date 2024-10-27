@@ -187,7 +187,7 @@ def train(args, accelerator):
         ppo_trainer.model.train()
         for batch in train_dataloader:
 
-            # sample batch : need to do iteratively for large batch sizes
+            # sample batch
             output_list, label_list = ppo_trainer.sample_batch(batch)
 
             # re-tokenize to right padding for forward pass

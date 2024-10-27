@@ -111,26 +111,29 @@ class PPOTrainer(RLTrainer):
         )
 
 
-    # sample batch
+    # sample batch -> input_ids, attention_mask, labels
     def sample_batch(self, batch):
 
         output_list = []
         label_list = []
-        num_m_batches = self.config.batch_size/self.config.mini_batch_size
+        batch_size = self.config.batch_size
+        mini_batch_size = self.config.mini_batch_size
+        num_m_batches = batch_size/mini_batch_size
 
-        print(batch)
-        print(batch.keys())
-        quit()
-
+        # sample batch : need to do iteratively for large batch sizes
         # cant stack them, different sized outptus
         for m in range(num_m_batches):
             with torch.no_grad():
+                mini_batch = {k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in batch.items()}
                 output_ids = self.accelerator.unwrap_model(self.model).generate(
-                    # TODO: fix
-                    **batch[m*self.config.mini_batch_size:(m+1)*self.config.mini_batch_size],
+                    **mini_batch,
                     generation_config=self.config.generation_config,
                     **self.config.gen_kwargs
                 )
+                print(output_ids)
+                print(output_ids.shape)
+                quit()
+                
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
