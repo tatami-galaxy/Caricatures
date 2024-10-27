@@ -118,7 +118,7 @@ class PPOTrainer(RLTrainer):
         label_list = []
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
-        num_m_batches = batch_size/mini_batch_size
+        num_m_batches = batch_size//mini_batch_size
 
         # sample batch : need to do iteratively for large batch sizes
         # cant stack them, different sized outptus
@@ -130,10 +130,6 @@ class PPOTrainer(RLTrainer):
                     generation_config=self.config.generation_config,
                     **self.config.gen_kwargs
                 )
-                print(output_ids)
-                print(output_ids.shape)
-                quit()
-                
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
@@ -145,6 +141,8 @@ class PPOTrainer(RLTrainer):
             )
             output_list.append(output_ids)
             label_list.append(label_ids)
+
+        return output_list, label_list
 
 
     # forward with generated samples ti get logtis, values

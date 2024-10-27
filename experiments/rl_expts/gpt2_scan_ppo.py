@@ -197,6 +197,9 @@ def train(args, accelerator):
                 device=accelerator.device
             )
 
+            print(rl_inputs)
+            quit()
+
             # forward pass with generated ids
             
             # compute rewards
