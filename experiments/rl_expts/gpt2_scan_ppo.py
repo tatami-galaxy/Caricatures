@@ -1,18 +1,17 @@
 from tqdm.auto import tqdm
 import os
 import argparse
+import shutil
 
 from accelerate import Accelerator
 from accelerate.utils import set_seed
 
-import torch
 from torch.utils.data import DataLoader
-from torch.nn import CrossEntropyLoss
 import torch.nn.functional as F
 
 from transformers import (
     AutoTokenizer, default_data_collator,
-    get_scheduler, AutoModelForCausalLM,
+    AutoModelForCausalLM,
     AutoConfig, GenerationConfig,
 )
 
@@ -99,8 +98,10 @@ def train(args, accelerator):
         "num_beams": args.num_beams
     }
 
-    model = AutoModelForCausalLMWithValueHead(model)
-
+    # save and reload model for AutoModelForCausalLMWithValueHead in case token embedding was resized
+    model.save_pretrained('tmp_model')
+    model = AutoModelForCausalLMWithValueHead.from_pretrained('tmp_model', config=config)
+    shutil.rmtree('tmp_model')
 
     # preprocess dataset
     def preprocess_function(examples):

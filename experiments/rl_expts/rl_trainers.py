@@ -152,7 +152,7 @@ class PPOTrainer(RLTrainer):
         for m in range(num_m_batches):
             output = self.model(
                 input_ids=rl_inputs['generated_ids_list'][m],
-                attention_mask=rl_inputs['attention_mask'][m],
+                attention_mask=rl_inputs['attention_mask_list'][m],
             )
             print(output)
             quit()
