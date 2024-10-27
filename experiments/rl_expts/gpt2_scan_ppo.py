@@ -190,6 +190,8 @@ def train(args, accelerator):
 
             # sample batch
             output_list, label_list, logit_list = ppo_trainer.sample_batch(batch)
+            accelerator.print('okay')
+            quit()
             # re-tokenize to right padding for forward pass
             # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
             # TODO: prepare logits as well

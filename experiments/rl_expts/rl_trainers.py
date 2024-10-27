@@ -145,13 +145,9 @@ class PPOTrainer(RLTrainer):
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
             logits = self.accelerator.gather(self.accelerator.pad_across_processes(logits))
-            print('')
-            print(len(logits))
-            print('')
-            print(logits[0].shape)
-            quit()
             output_list.append(output_ids)
             label_list.append(label_ids)
+            logit_list.append(logits)
 
         return output_list, label_list, logit_list
 
