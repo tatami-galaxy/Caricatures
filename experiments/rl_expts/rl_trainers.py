@@ -1,15 +1,16 @@
 import torch
 from trl import AutoModelForCausalLMWithValueHead
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class PPOConfig:
-    mini_batch_size = 16
+    mini_batch_size: int = 16
     max_input_length: int = 512
     ignore_index: int = -100
-    generation_config = None
-    gen_kwargs = None
+    generation_config: Any = None
+    gen_kwargs: Any = None
 
 
 class RLTrainer:
@@ -117,7 +118,9 @@ class PPOTrainer(RLTrainer):
         num_m_batches = batch.shape[0]/self.config.mini_batch_size
 
         print(batch)
+        print(batch.keys())
         quit()
+        
         # cant stack them, different sized outptus
         for m in range(num_m_batches):
             with torch.no_grad():
