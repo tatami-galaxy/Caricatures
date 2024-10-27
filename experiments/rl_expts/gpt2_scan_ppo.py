@@ -251,7 +251,7 @@ def run():
     parser.add_argument(
         '--max_input_length',
         type=int,
-        default=512
+        default=300
     )
     parser.add_argument(
         '--max_gen_length',
