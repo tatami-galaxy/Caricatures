@@ -192,6 +192,7 @@ def train(args, accelerator):
             output_list, label_list, logit_list = ppo_trainer.sample_batch(batch)
             # re-tokenize to right padding for forward pass
             # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
+            # TODO: prepare logits as well
             rl_inputs = ppo_trainer.prepare_input_for_rl_step(
                 output_list,
                 label_list,

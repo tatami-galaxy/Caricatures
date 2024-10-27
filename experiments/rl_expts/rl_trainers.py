@@ -134,7 +134,9 @@ class PPOTrainer(RLTrainer):
                     **self.config.gen_kwargs
                 )
                 output_ids = output.sequences
-                logit_list.append(output.logits)  # gather?
+                print(output.logits)
+                quit()
+                #logit_list.append(output.logits)  # gather?
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
@@ -160,14 +162,6 @@ class PPOTrainer(RLTrainer):
                 input_ids=rl_inputs['generated_ids_list'][m],
                 attention_mask=rl_inputs['attention_mask_list'][m],
             )
-            # TODO: need both logtis and values
-            print(output)
-            print(output.shape)
-            print('logits')
-            print('')
-            print(rl_inputs['logit_list'][m])
-            print(rl_inputs['logit_list'][m].shape)
-            quit()
 
 
     def step(self):
