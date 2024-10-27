@@ -146,35 +146,14 @@ class PPOTrainer(RLTrainer):
 
 
     # forward with generated samples ti get logtis, values
-    def forward_with_gen_samples(self):
-        with torch.no_grad():
-                output = self.model(model_input, position_ids=position_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, decoder_input_ids=decoder_input_ids, decoder_attention_mask=decoder_attention_mask)
-                ref_logits = self.ref_model(model_input, position_ids=position_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, decoder_input_ids=decoder_input_ids, decoder_attention_mask=decoder_attention_mask)["logits"]
-        logits, v = output["logits"], output["values"]   
-        if decoder_input_ids is None:
-            value = v[:, -gen_len-1:-1]
-            logprob = logprobs_from_logits(logits[:,-gen_len-1:-1,:], model_input[:,-gen_len:])
-            ref_logprob = logprobs_from_logits(ref_logits[:,-gen_len-1:-1,:], model_input[:,-gen_len:])
-
-            value[attention_mask[:, -gen_len-1:-1] == 0] = 0 # Zero out
-            logprob[attention_mask[:, -gen_len-1:-1] == 0] = 0 # Zero out
-            ref_logprob[attention_mask[:, -gen_len-1:-1] == 0] = 0 # Zero out
-        else:
-            value = v[:, :-1]
-            logprob = logprobs_from_logits(logits[:,:-1,:], decoder_input_ids[:,1:])
-            ref_logprob = logprobs_from_logits(ref_logits[:,:-1,:], decoder_input_ids[:,1:])
-
-            value[decoder_attention_mask[:,:-1] == 0] = 0 # Zero out
-            logprob[decoder_attention_mask[:,:-1] == 0] = 0 # Zero out
-            ref_logprob[decoder_attention_mask[:,:-1] == 0] = 0 # Zero out
-            
-        # Handle CE for MIXER
-        if num_ce_tokens > 0:
-            value[:,:num_ce_tokens] = 0
-            logprob[:,:num_ce_tokens] = 0
-            ref_logprob[:,:num_ce_tokens] = 0        
-        
-        return logprob, ref_logprob, value
+    def forward_with_gen_samples(self, rl_inputs):
+        # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
+        output = self.model(
+            input_ids=rl_inputs['generated_ids'],
+            attention_mask=rl_inputs['attention_mask']
+        )
+        print(output)
+        quit()
 
 
     def step(self):

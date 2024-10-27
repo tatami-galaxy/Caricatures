@@ -189,18 +189,16 @@ def train(args, accelerator):
 
             # sample batch
             output_list, label_list = ppo_trainer.sample_batch(batch)
-
             # re-tokenize to right padding for forward pass
+            # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
             rl_inputs = ppo_trainer.prepare_input_for_rl_step(
                 output_list,
                 label_list,
                 device=accelerator.device
             )
 
-            print(rl_inputs)
-            quit()
-
             # forward pass with generated ids
+            ppo_trainer.forward_with_gen_samples(rl_inputs)
             
             # compute rewards
 
