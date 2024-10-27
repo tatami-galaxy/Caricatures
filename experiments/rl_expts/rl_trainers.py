@@ -125,11 +125,14 @@ class PPOTrainer(RLTrainer):
         for m in range(num_m_batches):
             with torch.no_grad():
                 mini_batch = {k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in batch.items()}
-                output_ids = self.accelerator.unwrap_model(self.model).generate(
+                output = self.accelerator.unwrap_model(self.model).generate(
                     **mini_batch,
                     generation_config=self.config.generation_config,
+                    output_logits=True,
                     **self.config.gen_kwargs
                 )
+                print(output)
+                quit()
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
@@ -154,6 +157,7 @@ class PPOTrainer(RLTrainer):
                 input_ids=rl_inputs['generated_ids_list'][m],
                 attention_mask=rl_inputs['attention_mask_list'][m],
             )
+            # TODO: need both logtis and values
             print(output)
             quit()
 
