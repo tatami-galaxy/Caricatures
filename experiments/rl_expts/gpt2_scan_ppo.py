@@ -164,6 +164,7 @@ def train(args, accelerator):
 
     # ppo trainer
     ppo_config = PPOConfig(
+        batch_size=args.batch_size,
         mini_batch_size=args.mini_batch_size,
         max_input_length=args.max_input_length,
         generation_config=generation_config,
@@ -174,7 +175,6 @@ def train(args, accelerator):
         model=model,
         tokenizer=tokenizer,
         accelerator=accelerator,
-        max_length=args.max_input_length
     )
 
     # train
@@ -186,7 +186,7 @@ def train(args, accelerator):
     while True:
         ppo_trainer.model.train()
         for batch in train_dataloader:
-            
+
             # sample batch : need to do iteratively for large batch sizes
             output_list, label_list = ppo_trainer.sample_batch(batch)
 

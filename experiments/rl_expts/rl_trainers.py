@@ -6,6 +6,7 @@ from typing import Any
 
 @dataclass
 class PPOConfig:
+    batch_size: int = 256
     mini_batch_size: int = 16
     max_input_length: int = 512
     ignore_index: int = -100
@@ -115,12 +116,12 @@ class PPOTrainer(RLTrainer):
 
         output_list = []
         label_list = []
-        num_m_batches = batch.shape[0]/self.config.mini_batch_size
+        num_m_batches = self.config.batch_size/self.config.mini_batch_size
 
         print(batch)
         print(batch.keys())
         quit()
-        
+
         # cant stack them, different sized outptus
         for m in range(num_m_batches):
             with torch.no_grad():
