@@ -134,9 +134,7 @@ class PPOTrainer(RLTrainer):
                     **self.config.gen_kwargs
                 )
                 output_ids = output.sequences
-                print(output.logits)
-                quit()
-                #logit_list.append(output.logits)  # gather?
+                logits = output.logits
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
@@ -146,6 +144,10 @@ class PPOTrainer(RLTrainer):
                 self.accelerator.pad_across_processes(
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
+            logits = self.accelerator.gather(self.accelerator.pad_across_processes(logits))
+            print(len(logits))
+            print(logits[0].shape)
+            quit()
             output_list.append(output_ids)
             label_list.append(label_ids)
 
