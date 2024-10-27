@@ -186,15 +186,13 @@ def train(args, accelerator):
 
     while True:
         ppo_trainer.model.train()
+        # batches are left padded
         for batch in train_dataloader:
-
             # sample batch
             output_list, label_list, logit_list = ppo_trainer.sample_batch(batch)
-            accelerator.print('okay')
-            quit()
             # re-tokenize to right padding for forward pass
             # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
-            # TODO: prepare logits as well
+            # TODO: roll logits
             rl_inputs = ppo_trainer.prepare_input_for_rl_step(
                 output_list,
                 label_list,
@@ -274,12 +272,12 @@ def run():
     )
     parser.add_argument(
         "--batch_size",
-        default=512,
+        default=128,
         type=int,
     )
     parser.add_argument(
         "--mini_batch_size",
-        default=16,
+        default=8,
         type=int,
     )
     parser.add_argument(
