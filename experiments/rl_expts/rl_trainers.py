@@ -116,6 +116,7 @@ class PPOTrainer(RLTrainer):
 
         output_list = []
         label_list = []
+        logit_list = []
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
         num_m_batches = batch_size//mini_batch_size
@@ -128,11 +129,12 @@ class PPOTrainer(RLTrainer):
                 output = self.accelerator.unwrap_model(self.model).generate(
                     **mini_batch,
                     generation_config=self.config.generation_config,
+                    return_dict_in_generate=True,
                     output_logits=True,
                     **self.config.gen_kwargs
                 )
-                print(output)
-                quit()
+                output_ids = output.sequences
+                logit_list.append(output.logits)  # gather?
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
@@ -145,12 +147,13 @@ class PPOTrainer(RLTrainer):
             output_list.append(output_ids)
             label_list.append(label_ids)
 
-        return output_list, label_list
+        return output_list, label_list, logit_list
 
 
     # forward with generated samples to get logtis, values
     def forward_with_gen_samples(self, rl_inputs):
-        # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
+        # generated_ids_list, attention_mask_list, 
+        # gen_label_ids_list, context_label_ids_list, logit_list
         num_m_batches = self.config.batch_size//self.config.mini_batch_size
         for m in range(num_m_batches):
             output = self.model(
@@ -159,6 +162,11 @@ class PPOTrainer(RLTrainer):
             )
             # TODO: need both logtis and values
             print(output)
+            print(output.shape)
+            print('logits')
+            print('')
+            print(rl_inputs['logit_list'][m])
+            print(rl_inputs['logit_list'][m].shape)
             quit()
 
 
