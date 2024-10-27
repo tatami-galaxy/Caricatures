@@ -1,22 +1,32 @@
 import torch
 from trl import AutoModelForCausalLMWithValueHead
+from dataclasses import dataclass
+
+
+@dataclass
+class PPOConfig:
+    mini_batch_size = 16
+    max_input_length: int = 512
+    ignore_index: int = -100
+    generation_config = None
+    gen_kwargs = None
 
 
 class RLTrainer:
 
     def __init__(
             self,
+            config,
             model,
             tokenizer,
-            max_input_length,
+            accelerator,
             ref_model=None,
-            ignore_index=-100,
     ):
-        self.ref_model = ref_model
+        self.config = config
         self.model = model
         self.tokenizer = tokenizer
-        self.max_input_length = max_input_length
-        self.ignore_index = ignore_index
+        self.accelerator = accelerator
+        self.ref_model = ref_model
 
 
     # re-tokenize left padded sequences need for batch generation to right padded sequences
@@ -27,7 +37,7 @@ class RLTrainer:
         tokenized_tokens = self.tokenizer(
             tokens,
             padding='max_length',
-            max_length=self.max_input_length,
+            max_length=self.config.max_input_length,
             return_tensors='pt',
         ).to(device)
         input_ids = tokenized_tokens['input_ids']
@@ -57,14 +67,14 @@ class RLTrainer:
             tokenized_context = self.tokenizer(
                 [c+self.tokenizer.sep_token for c in context_tokens],
                 padding='max_length',
-                max_length=self.max_input_length,
+                max_length=self.config.max_input_length,
                 return_tensors='pt',
             ).to(device)
             context_label_ids = tokenized_context['input_ids']
             # set context label padding to -100 
             context_label_ids = [
                 [
-                    (l if l != self.tokenizer.pad_token_id else self.ignore_index) for l in label
+                    (l if l != self.tokenizer.pad_token_id else self.config.ignore_index) for l in label
                 ] for label in context_label_ids.tolist()
             ]
             context_label_ids = torch.tensor(context_label_ids).to(device)
@@ -84,26 +94,54 @@ class PPOTrainer(RLTrainer):
 
     def __init__(
             self,
+            config,
             model,
             tokenizer,
             accelerator,
-            max_length,
             ref_model=None,
-            ignore_index=-100,
         ):
         super().__init__(
+            config,
             model,
             tokenizer,
-            max_length,
+            accelerator,
             ref_model=None,
-            ignore_index=-100,
         )
-        self.optimizer = None
-        self.scheduler = None
 
 
     # sample batch
-    def generate_samples(self):
+    def sample_batch(self, batch):
+
+        output_list = []
+        label_list = []
+        num_m_batches = batch.shape[0]/self.config.mini_batch_size
+
+        print(batch)
+        quit()
+        # cant stack them, different sized outptus
+        for m in range(num_m_batches):
+            with torch.no_grad():
+                output_ids = self.accelerator.unwrap_model(self.model).generate(
+                    # TODO: fix
+                    **batch[m*self.config.mini_batch_size:(m+1)*self.config.mini_batch_size],
+                    generation_config=self.config.generation_config,
+                    **self.config.gen_kwargs
+                )
+            # gather from accelerator
+            output_ids = self.accelerator.gather(
+                self.accelerator.pad_across_processes(
+                    output_ids, dim=1, pad_index=self.tokenizer.pad_token_id)
+            )
+            label_ids = self.accelerator.gather(
+                self.accelerator.pad_across_processes(
+                    batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
+            )
+            output_list.append(output_ids)
+            label_list.append(label_ids)
+
+
+    # forward with generated samples ti get logtis, values
+    def forward_with_gen_samples(self):
         with torch.no_grad():
                 output = self.model(model_input, position_ids=position_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, decoder_input_ids=decoder_input_ids, decoder_attention_mask=decoder_attention_mask)
                 ref_logits = self.ref_model(model_input, position_ids=position_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, decoder_input_ids=decoder_input_ids, decoder_attention_mask=decoder_attention_mask)["logits"]

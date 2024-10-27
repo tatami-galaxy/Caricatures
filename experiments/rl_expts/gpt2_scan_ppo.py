@@ -19,7 +19,7 @@ from transformers import (
 from datasets import load_dataset
 
 import scan_constants
-from rl_trainers import PPOTrainer
+from rl_trainers import PPOConfig, PPOTrainer
 
 from trl import AutoModelForCausalLMWithValueHead
 
@@ -87,24 +87,19 @@ def train(args, accelerator):
                 config=config,
                 trust_remote_code=True,
             )
-
     # Resize the embeddings only when necessary to avoid index errors
     embedding_size = model.get_input_embeddings().weight.shape[0]
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
+    # generation config
+    generation_config = GenerationConfig.from_pretrained(args.model_checkpoint)
+    generation_config.pad_token_id = tokenizer.pad_token_id
+    gen_kwargs = {
+        "max_new_tokens": args.max_gen_length,
+        "num_beams": args.num_beams
+    }
 
     model = AutoModelForCausalLMWithValueHead(model)
-
-    # Generation config
-    generation_config = GenerationConfig.from_pretrained(args.model_checkpoint)
-    #gen_dict = generation_config.to_dict()
-    #gen_dict["language"] = model_lang
-    # reload with new attributes
-    #generation_config = GenerationConfig.from_dict(gen_dict)
-    #max_gen_length = model.config.max_length
-    #num_beams = args.num_beams if args.num_beams is not None else model.config.num_beams
-    generation_config.pad_token_id = tokenizer.pad_token_id
-    gen_kwargs = {"max_new_tokens": args.max_gen_length, "num_beams": args.num_beams}
 
 
     # preprocess dataset
@@ -149,14 +144,14 @@ def train(args, accelerator):
         train_dataset,
         shuffle=True,
         collate_fn=default_data_collator,
-        batch_size=args.mini_batch_size,
-        drop_last=True,
+        batch_size=args.batch_size,
+        drop_last=True, # do not remove
     )
     eval_dataloader = DataLoader(
         eval_dataset,
         shuffle=True,
         collate_fn=default_data_collator,
-        batch_size=args.mini_batch_size,
+        batch_size=args.batch_size,
         drop_last=True,
     )
 
@@ -168,7 +163,14 @@ def train(args, accelerator):
     model, train_dataloader, eval_dataloader = accelerator.prepare(model, train_dataloader, eval_dataloader)
 
     # ppo trainer
+    ppo_config = PPOConfig(
+        mini_batch_size=args.mini_batch_size,
+        max_input_length=args.max_input_length,
+        generation_config=generation_config,
+        gen_kwargs=gen_kwargs,
+    )
     ppo_trainer = PPOTrainer(
+        config=ppo_config,
         model=model,
         tokenizer=tokenizer,
         accelerator=accelerator,
@@ -177,53 +179,33 @@ def train(args, accelerator):
 
     # train
     global_step = 0  # tracks total steps
-    # number of mini batches in a sample
-    num_batches = args.sample_size / args.mini_batch_size
     progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
     # eval bar
     eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 
     while True:
-        model.train()
-
-        # sample batch : need to do iteratively for large batch sizes
-        # cant stack them, different sized outptus
-        output_list = []
-        label_list = []
+        ppo_trainer.model.train()
         for batch in train_dataloader:
-            with torch.no_grad():
-                output_ids = accelerator.unwrap_model(model).generate(
-                    **batch,
-                    generation_config=generation_config,
-                    **gen_kwargs
-                )
-            # gather from accelerator
-            output_ids = accelerator.gather(
-                accelerator.pad_across_processes(output_ids, dim=1, pad_index=tokenizer.pad_token_id)
-            )
-            label_ids = accelerator.gather(
-                accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
-            )
-            output_list.append(output_ids)
-            label_list.append(label_ids)
-
-            # keep sampling until sample_size is reached
-            if len(output_list) < num_batches: continue
+            
+            # sample batch : need to do iteratively for large batch sizes
+            output_list, label_list = ppo_trainer.sample_batch(batch)
 
             # re-tokenize to right padding for forward pass
-            rl_inputs = ppo_trainer.prepare_input_for_rl_step(output_list, label_list, device=model.device)
-            print(rl_inputs['generated_ids_list'])
-            quit()
+            rl_inputs = ppo_trainer.prepare_input_for_rl_step(
+                output_list,
+                label_list,
+                device=accelerator.device
+            )
 
-        # forward pass with generated ids
-        
-        # compute rewards
+            # forward pass with generated ids
+            
+            # compute rewards
 
-        # loop
-        
-        #   sample minibatch
+            # loop
+            
+            #   sample minibatch
 
-        #   update policy
+            #   update policy
 
 
 def run():
@@ -285,7 +267,7 @@ def run():
         help="The number of processes to use for the preprocessing."
     )
     parser.add_argument(
-        "--sample_size",
+        "--batch_size",
         default=512,
         type=int,
     )
@@ -342,8 +324,8 @@ def run():
     # set seed
     set_seed(args.seed)
 
-    if args.sample_size % args.mini_batch_size != 0:
-        raise ValueError('sample size must be divisible by mini_batch_size') 
+    if args.batch_size % args.mini_batch_size != 0:
+        raise ValueError('batch size must be divisible by mini_batch_size') 
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
@@ -361,7 +343,7 @@ def run():
         "lr": args.lr,
         "train_steps": args.train_steps,
         "seed": args.seed,
-        "sample_size": args.sample_size,
+        "batch_size": args.batch_size,
         "mini_batch_size": args.mini_batch_size,
         "max_input_length": args.max_input_length,
         "max_gen_length": args.max_gen_length,
