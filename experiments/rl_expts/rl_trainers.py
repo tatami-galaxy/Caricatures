@@ -145,15 +145,17 @@ class PPOTrainer(RLTrainer):
         return output_list, label_list
 
 
-    # forward with generated samples ti get logtis, values
+    # forward with generated samples to get logtis, values
     def forward_with_gen_samples(self, rl_inputs):
         # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
-        output = self.model(
-            input_ids=rl_inputs['generated_ids'],
-            attention_mask=rl_inputs['attention_mask']
-        )
-        print(output)
-        quit()
+        num_m_batches = self.config.batch_size//self.config.mini_batch_size
+        for m in range(num_m_batches):
+            output = self.model(
+                input_ids=rl_inputs['generated_ids_list'][m],
+                attention_mask=rl_inputs['attention_mask'][m],
+            )
+            print(output)
+            quit()
 
 
     def step(self):
