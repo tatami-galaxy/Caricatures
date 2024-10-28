@@ -1,4 +1,5 @@
 - PPO -> boundless das
 - PPO -> circuit discovery?
+- causal model
 - RASP-L -> ground truth circuit
 - STE, Gumbel Softmax?

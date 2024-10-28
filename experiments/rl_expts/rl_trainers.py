@@ -125,7 +125,7 @@ class PPOTrainer(RLTrainer):
     
     # re-tokenize, set padding
 
-    def prepare_input_for_ppo_step(self, output_list, gen_label_ids, low_mem=False):
+    def prepare_input_for_ppo_step(self, output_list, gen_label_ids, device):
         # generated_ids -> context ids + generated action ids
         # attention mask -> attention mask for generated_ids
         # gen_label_ids -> generated action ids
@@ -136,8 +136,6 @@ class PPOTrainer(RLTrainer):
             'gen_label_ids': [],
             'context_label_ids_list': [],
         }
-        device = 'cpu' if low_mem else self.accelerator.device
-
         gen_label_ids, _ = self.re_tokenize(gen_label_ids, device)
         for l in range(len(output_list)):
             generated_ids, attention_mask = self.re_tokenize(output_list[l], device)
@@ -186,10 +184,8 @@ class PPOTrainer(RLTrainer):
 
 
     # forward with generated samples to get logtis, values
-    def forward_with_gen_samples(self, rl_inputs, low_mem=False):
+    def forward_with_gen_samples(self, output_list, label_ids, low_mem=False):
 
-        # generated_ids_list, attention_mask_list, 
-        # gen_label_ids, context_label_ids_list
         logit_list = []
         logprob_list = []
         ref_logprob_list = []
@@ -200,12 +196,18 @@ class PPOTrainer(RLTrainer):
 
         device = 'cpu' if low_mem else self.accelerator.device
 
-        print(num_m_batches)
+        # generated_ids -> context ids + generated action ids
+        # attention mask -> attention mask for generated_ids
+        # gen_label_ids -> generated action ids
+        # context_label_ids -> context ids, needed to compute ce loss for context
+        # TODO: involves gpu -> cpu -> gpu: can we speed this up?
+        rl_inputs = self.prepare_input_for_ppo_step(
+            output_list,
+            label_ids,
+            device,
+        )
 
         for m in range(num_m_batches):
-
-            print(m)
-
             # needs to be on gpu for forward
             generated_ids = rl_inputs['generated_ids_list'][m].to(self.accelerator.device)
             attention_mask = rl_inputs['attention_mask_list'][m].to(self.accelerator.device)
@@ -247,31 +249,29 @@ class PPOTrainer(RLTrainer):
         }
 
         return forward_dict
+    
 
+    def compute_rewards(self):
+        #scores = score_function(generated_ids, gen_label_ids)
+        # get score earlier
+        pass
 
 
     def step(self, batch, low_mem=False):
 
-        # sample batch
+        ## sample batch ##
         # outputs are padded per minibatch
         # label_ids -> single tensor
         output_list, label_ids = self.sample_batch(batch)
-        # TODO: involves gpu -> cpu -> gpu: can we speed this up?
-        rl_inputs = self.prepare_input_for_ppo_step(
-            output_list,
-            label_ids,
-            low_mem,
-        )
-        #rl_inputs['logit_list'] = logit_list
 
-        # forward pass with generated ids (+context)
+        ## forward pass with generated ids (+context) ##
         # lists with minibatch outputs
         # logit_list, logprob_list, ref_logprob_list, value_list
-        forward_dict = self.forward_with_gen_samples(rl_inputs, low_mem)
-        print('done')
-        quit()
+        # TODO: get scores here
+        forward_dict = self.forward_with_gen_samples(output_list, label_ids, low_mem)
         
-        # compute rewards
+        ## compute rewards ##
+        self.compute_rewards()
 
         # loop
         
