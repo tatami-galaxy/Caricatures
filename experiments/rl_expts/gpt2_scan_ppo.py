@@ -2,6 +2,7 @@ from tqdm.auto import tqdm
 import os
 import argparse
 import shutil
+import copy
 
 from accelerate import Accelerator
 from accelerate.utils import set_seed
@@ -103,6 +104,9 @@ def train(args, accelerator):
     model = AutoModelForCausalLMWithValueHead.from_pretrained('tmp_model', config=config)
     shutil.rmtree('tmp_model')
 
+    # reference model for ppo
+    ref_model = copy.deepcopy(model)
+
     # preprocess dataset
     def preprocess_function(examples):
         # commands, actions
@@ -161,7 +165,9 @@ def train(args, accelerator):
     tokenizer.padding_side = "right"
 
     # prepare
-    model, train_dataloader, eval_dataloader = accelerator.prepare(model, train_dataloader, eval_dataloader)
+    model, ref_model, train_dataloader, eval_dataloader = accelerator.prepare(
+        model, ref_model, train_dataloader, eval_dataloader
+    )
 
     # ppo trainer
     ppo_config = PPOConfig(
@@ -174,6 +180,7 @@ def train(args, accelerator):
     ppo_trainer = PPOTrainer(
         config=ppo_config,
         model=model,
+        ref_model=ref_model,
         tokenizer=tokenizer,
         accelerator=accelerator,
     )
@@ -185,7 +192,7 @@ def train(args, accelerator):
     #eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 
     while True:
-        ppo_trainer.model.train()
+        #ppo_trainer.model.train()
         # batches are left padded
         for batch in train_dataloader:
             ppo_trainer.step(batch)
@@ -251,7 +258,7 @@ def run():
     )
     parser.add_argument(
         "--batch_size",
-        default=128,
+        default=512,
         type=int,
     )
     parser.add_argument(
