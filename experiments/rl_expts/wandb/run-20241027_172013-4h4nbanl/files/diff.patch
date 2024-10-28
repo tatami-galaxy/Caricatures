@@ -1,0 +1,13 @@
+diff --git a/experiments/rl_expts/rl_trainers.py b/experiments/rl_expts/rl_trainers.py
+index 930b6a7..85d5179 100644
+--- a/experiments/rl_expts/rl_trainers.py
++++ b/experiments/rl_expts/rl_trainers.py
+@@ -152,7 +152,7 @@ class PPOTrainer(RLTrainer):
+         for m in range(num_m_batches):
+             output = self.model(
+                 input_ids=rl_inputs['generated_ids_list'][m],
+-                attention_mask=rl_inputs['attention_mask'][m],
++                attention_mask=rl_inputs['attention_mask_list'][m],
+             )
+             print(output)
+             quit()

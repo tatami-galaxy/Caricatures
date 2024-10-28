@@ -1,0 +1,16 @@
+diff --git a/experiments/rl_expts/rl_trainers.py b/experiments/rl_expts/rl_trainers.py
+index 1c30235..d00f0a3 100644
+--- a/experiments/rl_expts/rl_trainers.py
++++ b/experiments/rl_expts/rl_trainers.py
+@@ -118,8 +118,9 @@ class PPOTrainer(RLTrainer):
+         label_list = []
+         num_m_batches = self.config.batch_size/self.config.mini_batch_size
+ 
+-        print(batch)
+-        print(batch.keys())
++        print(batch['input_ids'].shape)
++        print(batch['attention_mask'].shape)
++        print(batch['labels'].shape)
+         quit()
+ 
+         # cant stack them, different sized outptus

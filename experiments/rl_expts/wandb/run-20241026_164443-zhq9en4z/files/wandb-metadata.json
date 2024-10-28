@@ -1,0 +1,213 @@
+{
+    "os": "Linux-6.8.0-47-generic-x86_64-with-glibc2.39",
+    "python": "3.12.0",
+    "heartbeatAt": "2024-10-26T11:14:44.081693",
+    "startedAt": "2024-10-26T11:14:43.024518",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--output_dir",
+        "/home/drdo/Caricatures/models/scan_distilgpt2_ppo",
+        "--model_checkpoint",
+        "/home/drdo/Caricatures/models/scan_distilgpt2/checkpoint-40000"
+    ],
+    "state": "running",
+    "program": "/home/drdo/Caricatures/experiments/rl_expts/gpt2_scan_ppo.py",
+    "codePathLocal": "gpt2_scan_ppo.py",
+    "codePath": "experiments/rl_expts/gpt2_scan_ppo.py",
+    "git": {
+        "remote": "https://github.com/tatami-galaxy/Caricatures.git",
+        "commit": "2631a9f17f21d35b2e693e5377e39bb21ea32858"
+    },
+    "email": "ujandev@gmail.com",
+    "root": "/home/drdo/Caricatures",
+    "host": "drdo-omen-4090",
+    "username": "drdo",
+    "executable": "/home/drdo/anaconda3/envs/nlp/bin/python",
+    "cpu_count": 24,
+    "cpu_count_logical": 32,
+    "cpu_freq": {
+        "current": 1477.1949687500003,
+        "min": 800.0,
+        "max": 5050.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 800.637,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 799.814,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.152,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 801.841,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 799.046,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 3860.136,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 2653.416,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 5800.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 797.177,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 4300.158,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 4319.166,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 4299.969,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 4291.114,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.4,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.315,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 799.818,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 800.0,
+            "min": 800.0,
+            "max": 4300.0
+        },
+        {
+            "current": 801.644,
+            "min": 800.0,
+            "max": 4300.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 937.3305015563965,
+            "used": 405.107608795166
+        }
+    },
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce RTX 4090",
+            "memory_total": 25757220864
+        }
+    ],
+    "memory": {
+        "total": 62.4819450378418
+    }
+}

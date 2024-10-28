@@ -1,0 +1,13 @@
+diff --git a/experiments/rl_expts/rl_trainers.py b/experiments/rl_expts/rl_trainers.py
+index d61d87a..d4caab7 100644
+--- a/experiments/rl_expts/rl_trainers.py
++++ b/experiments/rl_expts/rl_trainers.py
+@@ -118,7 +118,7 @@ class PPOTrainer(RLTrainer):
+         label_list = []
+         batch_size = self.config.batch_size
+         mini_batch_size = self.config.mini_batch_size
+-        num_m_batches = batch_size/mini_batch_size
++        num_m_batches = batch_size//mini_batch_size
+ 
+         # sample batch : need to do iteratively for large batch sizes
+         # cant stack them, different sized outptus

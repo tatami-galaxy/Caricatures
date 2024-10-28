@@ -1,0 +1,15 @@
+diff --git a/experiments/rl_expts/rl_trainers.py b/experiments/rl_expts/rl_trainers.py
+index d7987bd..340da6d 100644
+--- a/experiments/rl_expts/rl_trainers.py
++++ b/experiments/rl_expts/rl_trainers.py
+@@ -134,7 +134,9 @@ class PPOTrainer(RLTrainer):
+                     **self.config.gen_kwargs
+                 )
+                 output_ids = output.sequences
+-                print(output.logits)
++                print(mini_batch['attention_mask'].shape)
++                print(len(output.logits))
++                print(output.logits[0])
+                 quit()
+                 #logit_list.append(output.logits)  # gather?
+             # gather from accelerator

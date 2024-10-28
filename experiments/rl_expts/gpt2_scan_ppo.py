@@ -180,36 +180,15 @@ def train(args, accelerator):
 
     # train
     global_step = 0  # tracks total steps
-    progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
+    #progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
     # eval bar
-    eval_bar = tqdm(range(len(eval_dataloader)), position=1)
+    #eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 
     while True:
         ppo_trainer.model.train()
         # batches are left padded
         for batch in train_dataloader:
-            # sample batch
-            output_list, label_list, logit_list = ppo_trainer.sample_batch(batch)
-            # re-tokenize to right padding for forward pass
-            # generated_ids_list, attention_mask_list, gen_label_ids_list, context_label_ids_list
-            # TODO: roll logits
-            rl_inputs = ppo_trainer.prepare_input_for_rl_step(
-                output_list,
-                label_list,
-                device=accelerator.device
-            )
-            rl_inputs['logit_list'] = logit_list
-
-            # forward pass with generated ids
-            ppo_trainer.forward_with_gen_samples(rl_inputs)
-            
-            # compute rewards
-
-            # loop
-            
-            #   sample minibatch
-
-            #   update policy
+            ppo_trainer.step(batch)
 
 
 def run():

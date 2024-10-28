@@ -1,0 +1,21 @@
+diff --git a/experiments/rl_expts/gpt2_scan_ppo.py b/experiments/rl_expts/gpt2_scan_ppo.py
+index e91f292..eef5167 100644
+--- a/experiments/rl_expts/gpt2_scan_ppo.py
++++ b/experiments/rl_expts/gpt2_scan_ppo.py
+@@ -13,7 +13,6 @@ import torch.nn.functional as F
+ from transformers import (
+     AutoTokenizer, default_data_collator,
+     get_scheduler, AutoModelForCausalLM,
+-    AutoModelForCausalLMWithValueHead,
+     AutoConfig, GenerationConfig,
+ )
+ 
+@@ -22,6 +21,8 @@ from datasets import load_dataset
+ import scan_constants
+ from rl_trainers import PPOTrainer
+ 
++from trl import AutoModelForCausalLMWithValueHead
++
+ 
+ def train(args, accelerator):
+     

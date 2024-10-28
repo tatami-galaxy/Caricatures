@@ -88,8 +88,10 @@ class RLTrainer:
         return rl_inputs
 
 
+
 class ReinforceTrainer(RLTrainer):
     pass
+
 
 
 class PPOTrainer(RLTrainer):
@@ -116,7 +118,7 @@ class PPOTrainer(RLTrainer):
 
         output_list = []
         label_list = []
-        logit_list = []
+        #logit_list = []
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
         num_m_batches = batch_size//mini_batch_size
@@ -129,12 +131,12 @@ class PPOTrainer(RLTrainer):
                 output = self.accelerator.unwrap_model(self.model).generate(
                     **mini_batch,
                     generation_config=self.config.generation_config,
-                    return_dict_in_generate=True,
-                    output_logits=True,
+                    #return_dict_in_generate=True,
+                    #output_logits=True,
                     **self.config.gen_kwargs
                 )
                 output_ids = output.sequences
-                logits = output.logits
+                #logits = output.logits
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
@@ -144,12 +146,12 @@ class PPOTrainer(RLTrainer):
                 self.accelerator.pad_across_processes(
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
-            logits = self.accelerator.gather(self.accelerator.pad_across_processes(logits))
+            #logits = self.accelerator.gather(self.accelerator.pad_across_processes(logits))
             output_list.append(output_ids)
             label_list.append(label_ids)
-            logit_list.append(logits)
+            #logit_list.append(logits)
 
-        return output_list, label_list, logit_list
+        return output_list, label_list
 
 
     # forward with generated samples to get logtis, values
@@ -158,19 +160,33 @@ class PPOTrainer(RLTrainer):
         # gen_label_ids_list, context_label_ids_list, logit_list
         num_m_batches = self.config.batch_size//self.config.mini_batch_size
         for m in range(num_m_batches):
+            # output = (lm_logits, loss=None, value)
             output = self.model(
                 input_ids=rl_inputs['generated_ids_list'][m],
                 attention_mask=rl_inputs['attention_mask_list'][m],
             )
+            quit()
 
 
-    def step(self):
+    def step(self, batch):
+
         # sample batch
-        self.generate_samples()
+        # outputs, labels are padded per minibatch
+        output_list, label_list = self.sample_batch(batch)
+        rl_inputs = self.prepare_input_for_rl_step(
+            output_list,
+            label_list,
+            device=self.accelerator.device
+        )
+        #rl_inputs['logit_list'] = logit_list
 
+        # forward pass with generated ids (+contxt)
+        self.forward_with_gen_samples(rl_inputs)
+        
+        # compute rewards
 
-        # calculate rewards
-        # loop:
+        # loop
+        
         #   sample minibatch
+
         #   update policy
-        pass

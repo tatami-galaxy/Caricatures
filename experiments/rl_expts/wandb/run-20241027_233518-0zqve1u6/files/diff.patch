@@ -1,0 +1,16 @@
+diff --git a/experiments/rl_expts/gpt2_scan_ppo.py b/experiments/rl_expts/gpt2_scan_ppo.py
+index 2cbbed7..978cff2 100644
+--- a/experiments/rl_expts/gpt2_scan_ppo.py
++++ b/experiments/rl_expts/gpt2_scan_ppo.py
+@@ -180,9 +180,9 @@ def train(args, accelerator):
+ 
+     # train
+     global_step = 0  # tracks total steps
+-    progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
++    #progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
+     # eval bar
+-    eval_bar = tqdm(range(len(eval_dataloader)), position=1)
++    #eval_bar = tqdm(range(len(eval_dataloader)), position=1)
+ 
+     while True:
+         ppo_trainer.model.train()

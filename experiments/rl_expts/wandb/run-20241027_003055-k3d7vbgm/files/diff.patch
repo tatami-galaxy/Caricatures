@@ -1,0 +1,14 @@
+diff --git a/experiments/rl_expts/gpt2_scan_ppo.py b/experiments/rl_expts/gpt2_scan_ppo.py
+index f1a695d..bfa7944 100644
+--- a/experiments/rl_expts/gpt2_scan_ppo.py
++++ b/experiments/rl_expts/gpt2_scan_ppo.py
+@@ -369,6 +369,9 @@ def run():
+     # run = os.path.split(__file__)[-1].split(".")[0]
+     accelerator.init_trackers('runs', track_config)
+ 
++    print(accelerator.device)
++    quit()
++
+     # train function
+     train(args, accelerator)
+ 
