@@ -195,7 +195,7 @@ def train(args, accelerator):
         #ppo_trainer.model.train()
         # batches are left padded
         for batch in train_dataloader:
-            ppo_trainer.step(batch)
+            ppo_trainer.step(batch, low_mem=True)
 
 
 def run():
