@@ -182,6 +182,29 @@ class PPOTrainer(RLTrainer):
         return logits
 
 
+    def score_function(self, output_ids, gen_label_ids, device, metric='acc'):
+        # decode output
+        output_tokens = self.tokenizer.batch_decode(output_ids, skip_special_tokens=False)
+        output_tokens = [
+            o.replace(self.tokenizer.pad_token, '').split(self.tokenizer.sep_token)[1] for o in output_tokens
+        ]
+        # decode labels
+        label_tokens = self.tokenizer.batch_decode(gen_label_ids, skip_special_tokens=False)
+        label_tokens = [l.replace(self.tokenizer.pad_token, '') for l in label_tokens]
+        
+        # calculate score
+        if metric == 'acc':
+            score = [o==l for o, l in zip(output_tokens, label_tokens)]
+            score = torch.tensor(score, dtype=torch.float32).to(device)
+        elif metric == 'incr_acc':
+            print(output_tokens)
+            print('')
+            print(label_tokens)
+            quit()
+        else:
+            raise ValueError('Incorrect metric passed to score function')
+        return score
+
 
     # forward with generated samples to get logtis, values
     def forward_with_gen_samples(self, output_list, label_ids, low_mem=False):
@@ -190,12 +213,14 @@ class PPOTrainer(RLTrainer):
         logprob_list = []
         ref_logprob_list = []
         value_list = []
+        score_list = []
+
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
         num_m_batches = batch_size//mini_batch_size
-
         device = 'cpu' if low_mem else self.accelerator.device
 
+        # change padding from left to right
         # generated_ids -> context ids + generated action ids
         # attention mask -> attention mask for generated_ids
         # gen_label_ids -> generated action ids
@@ -212,7 +237,7 @@ class PPOTrainer(RLTrainer):
             generated_ids = rl_inputs['generated_ids_list'][m].to(self.accelerator.device)
             attention_mask = rl_inputs['attention_mask_list'][m].to(self.accelerator.device)
             # can be on cpu
-            gen_label_ids = rl_inputs['gen_label_ids'].to(device)
+            gen_label_ids = rl_inputs['gen_label_ids'][m*mini_batch_size:(m+1)*mini_batch_size].to(device)
             context_label_ids = rl_inputs['context_label_ids_list'][m].to(device)
 
             # output = (lm_logits, loss=None, value)
@@ -225,9 +250,8 @@ class PPOTrainer(RLTrainer):
             values = values.to(device)
             ref_logits = ref_logits.to(device)
 
-            gen_label_ids_m = gen_label_ids[m*mini_batch_size:(m+1)*mini_batch_size]
-            logprob = self.logprobs_from_logits(logits, gen_label_ids_m)
-            ref_logprob = self.logprobs_from_logits(ref_logits, gen_label_ids_m)
+            logprob = self.logprobs_from_logits(logits, gen_label_ids)
+            ref_logprob = self.logprobs_from_logits(ref_logits, gen_label_ids)
 
             # zero out
             logprob = self.zero_out_logits(logprob, context_label_ids, attention_mask)
@@ -235,25 +259,29 @@ class PPOTrainer(RLTrainer):
             logits = self.zero_out_logits(logits, context_label_ids, attention_mask)
             values = self.zero_out_logits(values, context_label_ids, attention_mask)
 
+            # scores
+            #scores = self.score_function(generated_ids, gen_label_ids, device, metric='acc')
+            scores = self.score_function(generated_ids, gen_label_ids, device, metric='incr_acc')
+
             # append to list
             logprob_list.append(logprob)
             ref_logprob_list.append(ref_logprob)
             logit_list.append(logits)
             value_list.append(values)
+            score_list.append(scores)
 
         forward_dict = {
             'logit_list': logit_list,
             'logprob_list': logprob_list,
             'ref_logprob_list': ref_logprob_list,
             'value_list': value_list,
+            'score_list': score_list,
         }
 
         return forward_dict
     
 
     def compute_rewards(self):
-        #scores = score_function(generated_ids, gen_label_ids)
-        # get score earlier
         pass
 
 
@@ -266,8 +294,7 @@ class PPOTrainer(RLTrainer):
 
         ## forward pass with generated ids (+context) ##
         # lists with minibatch outputs
-        # logit_list, logprob_list, ref_logprob_list, value_list
-        # TODO: get scores here
+        # logit_list, logprob_list, ref_logprob_list, value_list, score_list
         forward_dict = self.forward_with_gen_samples(output_list, label_ids, low_mem)
         
         ## compute rewards ##
