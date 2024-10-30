@@ -89,7 +89,6 @@ class PPOTrainer(RLTrainer):
     def sample_batch(self, batch):
 
         output_list = []
-        #logit_list = []
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
         num_m_batches = batch_size//mini_batch_size
@@ -102,48 +101,47 @@ class PPOTrainer(RLTrainer):
                 output_ids = self.accelerator.unwrap_model(self.model).generate(
                     **mini_batch,
                     generation_config=self.config.generation_config,
-                    #return_dict_in_generate=True,
-                    #output_logits=True,
                     **self.config.gen_kwargs
                 )
-                #output_ids = output.sequences
-                #logits = output.logits
             # gather from accelerator
             output_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
                     output_ids, dim=1, pad_index=self.tokenizer.pad_token_id)
             )
-            #logits = self.accelerator.gather(self.accelerator.pad_across_processes(logits))
             output_list.append(output_ids)
-            #logit_list.append(logits)
 
         label_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
+        
         return output_list, label_ids
     
-    # re-tokenize, set padding
 
+    # re-tokenize, set padding
     def prepare_input_for_ppo_step(self, output_list, gen_label_ids, device):
-        # generated_ids -> context ids + generated action ids
+        # output_ids -> context ids + generated action ids
         # attention mask -> attention mask for generated_ids
-        # gen_label_ids -> generated action ids
+        # gen_ids -> generated action ids
+        # gen_label_ids -> label action ids
         # context_label_ids -> context ids, needed to compute ce loss for context
         rl_inputs = {
-            'generated_ids_list': [],
+            'output_ids_list': [],
             'attention_mask_list': [],
-            'gen_label_ids': [],
+            'gen_ids_list': [],
+            'gen_label_ids': None,
             'context_label_ids_list': [],
         }
+
         gen_label_ids, _ = self.re_tokenize(gen_label_ids, device)
+
         for l in range(len(output_list)):
-            generated_ids, attention_mask = self.re_tokenize(output_list[l], device)
+            output_ids, attention_mask = self.re_tokenize(output_list[l], device)
+
             # context labels needed for ce loss for context
-            # get only context labels
-            all_tokens = self.tokenizer.batch_decode(generated_ids)
-            context_tokens = [t.split(self.tokenizer.sep_token)[
-                0] for t in all_tokens]
+            # get only context label tokens -> model always generates context first
+            all_tokens = self.tokenizer.batch_decode(output_ids)
+            context_tokens = [t.split(self.tokenizer.sep_token)[0] for t in all_tokens]
             tokenized_context = self.tokenizer(
                 [c+self.tokenizer.sep_token for c in context_tokens],
                 padding='max_length',
@@ -158,14 +156,108 @@ class PPOTrainer(RLTrainer):
                 ] for label in context_label_ids.tolist()
             ]
             context_label_ids = torch.tensor(context_label_ids).to(device)
+
+            # get only gen tokens
+            gen_tokens = [t.split(self.tokenizer.sep_token)[1] for t in all_tokens]
+            tokenized_gen = self.tokenizer(
+                [g+self.tokenizer.eos_token for g in gen_tokens],
+                padding='max_length',
+                max_length=self.config.max_input_length,
+                return_tensors='pt',
+            ).to(device)
+            gen_ids = tokenized_gen['input_ids']
+
             # collect into dict
-            rl_inputs['generated_ids_list'].append(generated_ids)
+            rl_inputs['output_ids_list'].append(output_ids)
             rl_inputs['attention_mask_list'].append(attention_mask)
-            rl_inputs['gen_label_ids'] = gen_label_ids
+            rl_inputs['gen_ids_list'].append(gen_ids)
             rl_inputs['context_label_ids_list'].append(context_label_ids)
+
+        rl_inputs['gen_label_ids'] = gen_label_ids
 
         return rl_inputs
 
+
+    # forward with generated samples to get logtis, values
+    def forward_with_gen_samples(self, output_list, label_ids, low_mem=False):
+
+        logit_list = []
+        logprob_list = []
+        ref_logprob_list = []
+        value_list = []
+        score_list = []
+        score_mask_list = []
+
+        batch_size = self.config.batch_size
+        mini_batch_size = self.config.mini_batch_size
+        num_m_batches = batch_size//mini_batch_size
+        device = 'cpu' if low_mem else self.accelerator.device
+
+        # change padding from left to right
+        # output_ids -> context ids + generated action ids
+        # attention mask -> attention mask for generated_ids
+        # gen_ids -> generated action ids
+        # gen_label_ids -> label action ids
+        # context_label_ids -> context ids, needed to compute ce loss for context
+        # TODO: involves gpu -> cpu -> gpu: can we speed this up?
+        rl_inputs = self.prepare_input_for_ppo_step(
+            output_list,
+            label_ids,
+            device,
+        )
+
+        for m in range(num_m_batches):
+            # needs to be on gpu for forward
+            output_ids = rl_inputs['output_ids_list'][m].to(self.accelerator.device)
+            attention_mask = rl_inputs['attention_mask_list'][m].to(self.accelerator.device)
+            # can be on cpu
+            gen_ids = rl_inputs['gen_ids_list'][m].to(device)
+            gen_label_ids = rl_inputs['gen_label_ids'][m*mini_batch_size:(m+1)*mini_batch_size].to(device)
+            context_label_ids = rl_inputs['context_label_ids_list'][m].to(device)
+
+            # output = (lm_logits, loss=None, value)
+            with torch.no_grad():
+                logits, _, values = self.model(input_ids=output_ids, attention_mask=attention_mask)
+                ref_logits, _, _ = self.ref_model(input_ids=output_ids, attention_mask=attention_mask)
+
+            # make sure same device
+            output_ids = output_ids.to(device)
+            attention_mask = attention_mask.to(device)
+            logits = logits.to(device)
+            values = values.to(device)
+            ref_logits = ref_logits.to(device)
+
+            logprob = self.logprobs_from_logits(logits, gen_label_ids)
+            ref_logprob = self.logprobs_from_logits(ref_logits, gen_label_ids)
+
+            # zero out
+            logprob = self.zero_out_logits(logprob, context_label_ids, attention_mask)
+            ref_logprob = self.zero_out_logits(ref_logprob, context_label_ids, attention_mask)
+            logits = self.zero_out_logits(logits, context_label_ids, attention_mask)
+            values = self.zero_out_logits(values, context_label_ids, attention_mask)
+
+            # scores
+            score, score_mask = self.score_function(gen_ids, gen_label_ids, metric='acc')
+
+            # append to list
+            logprob_list.append(logprob)
+            ref_logprob_list.append(ref_logprob)
+            logit_list.append(logits)
+            value_list.append(values)
+            score_list.append(score)
+            score_mask_list.append(score_mask)
+
+        forward_dict = {
+            'logit_list': logit_list,
+            'logprob_list': logprob_list,
+            'ref_logprob_list': ref_logprob_list,
+            'value_list': value_list,
+            'score_list': score_list,
+            'score_mask_list': score_mask_list,
+        }
+
+        return forward_dict
+    
 
     def logprobs_from_logits(self, logits, labels):
         # https://github.com/pytorch/pytorch/issues/563#issuecomment-330103591
@@ -182,106 +274,28 @@ class PPOTrainer(RLTrainer):
         return logits
 
 
-    def score_function(self, output_ids, gen_label_ids, device, metric='acc'):
-        # decode output
-        output_tokens = self.tokenizer.batch_decode(output_ids, skip_special_tokens=False)
-        output_tokens = [
-            o.replace(self.tokenizer.pad_token, '').split(self.tokenizer.sep_token)[1] for o in output_tokens
-        ]
-        # decode labels
-        label_tokens = self.tokenizer.batch_decode(gen_label_ids, skip_special_tokens=False)
-        label_tokens = [l.replace(self.tokenizer.pad_token, '') for l in label_tokens]
-        
-        # calculate score
+    def score_function(self, gen_ids, gen_label_ids, metric='acc'):
+        # calculate score per time step
+
         if metric == 'acc':
-            score = [o==l for o, l in zip(output_tokens, label_tokens)]
-            score = torch.tensor(score, dtype=torch.float32).to(device)
+            score = (gen_ids == gen_label_ids).type(torch.float)
+            # zero out padding positions
+            score[gen_label_ids == self.tokenizer.pad_token_id] = 0
+            # needed to discard padding scores
+            score_mask = gen_label_ids.detach().clone()
+            score_mask[score_mask == self.tokenizer.pad_token_id] = 0
+            score_mask[score_mask != 0] = 1
+
         elif metric == 'incr_acc':
-            print(output_tokens)
-            print('')
-            print(label_tokens)
-            quit()
+            pass
         else:
             raise ValueError('Incorrect metric passed to score function')
-        return score
-
-
-    # forward with generated samples to get logtis, values
-    def forward_with_gen_samples(self, output_list, label_ids, low_mem=False):
-
-        logit_list = []
-        logprob_list = []
-        ref_logprob_list = []
-        value_list = []
-        score_list = []
-
-        batch_size = self.config.batch_size
-        mini_batch_size = self.config.mini_batch_size
-        num_m_batches = batch_size//mini_batch_size
-        device = 'cpu' if low_mem else self.accelerator.device
-
-        # change padding from left to right
-        # generated_ids -> context ids + generated action ids
-        # attention mask -> attention mask for generated_ids
-        # gen_label_ids -> generated action ids
-        # context_label_ids -> context ids, needed to compute ce loss for context
-        # TODO: involves gpu -> cpu -> gpu: can we speed this up?
-        rl_inputs = self.prepare_input_for_ppo_step(
-            output_list,
-            label_ids,
-            device,
-        )
-
-        for m in range(num_m_batches):
-            # needs to be on gpu for forward
-            generated_ids = rl_inputs['generated_ids_list'][m].to(self.accelerator.device)
-            attention_mask = rl_inputs['attention_mask_list'][m].to(self.accelerator.device)
-            # can be on cpu
-            gen_label_ids = rl_inputs['gen_label_ids'][m*mini_batch_size:(m+1)*mini_batch_size].to(device)
-            context_label_ids = rl_inputs['context_label_ids_list'][m].to(device)
-
-            # output = (lm_logits, loss=None, value)
-            with torch.no_grad():
-                logits, _, values = self.model(input_ids=generated_ids, attention_mask=attention_mask)
-                ref_logits, _, _ = self.ref_model(input_ids=generated_ids, attention_mask=attention_mask)
-
-            # make sure same device
-            logits = logits.to(device)
-            values = values.to(device)
-            ref_logits = ref_logits.to(device)
-
-            logprob = self.logprobs_from_logits(logits, gen_label_ids)
-            ref_logprob = self.logprobs_from_logits(ref_logits, gen_label_ids)
-
-            # zero out
-            logprob = self.zero_out_logits(logprob, context_label_ids, attention_mask)
-            ref_logprob = self.zero_out_logits(ref_logprob, context_label_ids, attention_mask)
-            logits = self.zero_out_logits(logits, context_label_ids, attention_mask)
-            values = self.zero_out_logits(values, context_label_ids, attention_mask)
-
-            # scores
-            #scores = self.score_function(generated_ids, gen_label_ids, device, metric='acc')
-            scores = self.score_function(generated_ids, gen_label_ids, device, metric='incr_acc')
-
-            # append to list
-            logprob_list.append(logprob)
-            ref_logprob_list.append(ref_logprob)
-            logit_list.append(logits)
-            value_list.append(values)
-            score_list.append(scores)
-
-        forward_dict = {
-            'logit_list': logit_list,
-            'logprob_list': logprob_list,
-            'ref_logprob_list': ref_logprob_list,
-            'value_list': value_list,
-            'score_list': score_list,
-        }
-
-        return forward_dict
+        return score, score_mask
     
 
-    def compute_rewards(self):
+    def compute_rewards(self, forward_dict, kl_penalty=True):
+        # logit_list, logprob_list, ref_logprob_list
+        # value_list, score_list, score_mask_list
         pass
 
 
@@ -298,7 +312,7 @@ class PPOTrainer(RLTrainer):
         forward_dict = self.forward_with_gen_samples(output_list, label_ids, low_mem)
         
         ## compute rewards ##
-        self.compute_rewards()
+        self.compute_rewards(forward_dict)
 
         # loop
         
