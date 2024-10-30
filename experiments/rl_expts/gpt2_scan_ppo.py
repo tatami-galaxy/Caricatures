@@ -79,9 +79,6 @@ def train(args, accelerator):
     tokenizer = AutoTokenizer.from_pretrained(args.model_checkpoint, use_fast=True, trust_remote_code=True)
     tokenizer.add_special_tokens(scan_constants.special_tokens_dict)
 
-    # LEFT PADDING FOR BATCH GENARATION
-    tokenizer.padding_side = "left"
-
     model = AutoModelForCausalLM.from_pretrained(
                 args.model_checkpoint,
                 config=config,
@@ -114,12 +111,17 @@ def train(args, accelerator):
         targets = examples[output_column]
 
         # tokenize as single sequence separated by special token
+        # left padding for batch generation
+        tokenizer.padding_side = "left"
         model_inputs = tokenizer(
             [i+tokenizer.sep_token for i in inputs],
             padding='max_length', max_length=args.max_input_length
         )
-        # labels same as inputs. labels shifted right in the model forward by default
+        # right padding for logits
+        tokenizer.padding_side = "right"
+        # labels = context + actions
         model_inputs['labels'] = tokenizer(
+            [i+tokenizer.sep_token for i in inputs],
             [t+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_input_length
         )['input_ids']
@@ -160,9 +162,6 @@ def train(args, accelerator):
         drop_last=True,
     )
 
-    # CHANGE TO RIGHT PADDING (in re-tokenize) FOR FORWARD
-    # dataset already left padded for batch generation
-    tokenizer.padding_side = "right"
 
     # prepare
     model, ref_model, train_dataloader, eval_dataloader = accelerator.prepare(

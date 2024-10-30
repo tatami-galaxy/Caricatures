@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
 from trl import AutoModelForCausalLMWithValueHead
@@ -13,6 +14,23 @@ class PPOConfig:
     ignore_index: int = -100
     generation_config: Any = None
     gen_kwargs: Any = None
+    init_kl_coef: float =  0.2
+    target: float = 6.0
+    horizon: float = 10000
+
+
+class AdaptiveKLController:
+    # https://arxiv.org/pdf/1909.08593.pdf
+    def __init__(self, init_kl_coef, target, horizon):
+        self.value = init_kl_coef
+        self.target = target
+        self.horizon = horizon
+
+    def update(self, current, n_steps):
+        target = self.target
+        proportional_error = np.clip(current / target - 1, -0.2, 0.2)
+        mult = 1 + proportional_error * n_steps / self.horizon
+        self.value *= mult
 
 
 class RLTrainer:
@@ -83,6 +101,11 @@ class PPOTrainer(RLTrainer):
             accelerator,
         )
         self.ref_model = ref_model
+        self.kl_controller = AdaptiveKLController(
+            init_kl_coef=self.config.init_kl_coef,
+            target=self.config.target,
+            horizon=self.config.horizon,
+        )
 
 
     # sample batch -> input_ids, attention_mask, labels
@@ -121,24 +144,21 @@ class PPOTrainer(RLTrainer):
     # re-tokenize, set padding
     def prepare_input_for_ppo_step(self, output_list, gen_label_ids, device):
         # output_ids -> context ids + generated action ids
-        # attention mask -> attention mask for generated_ids
-        # gen_ids -> generated action ids
-        # gen_label_ids -> label action ids
+        # attention mask -> attention mask for output_ids
+        # TODO: gen_label_ids -> context_ids + label action ids
         # context_label_ids -> context ids, needed to compute ce loss for context
         rl_inputs = {
             'output_ids_list': [],
             'attention_mask_list': [],
-            'gen_ids_list': [],
-            'gen_label_ids': None,
+            'gen_label_ids': [],
             'context_label_ids_list': [],
         }
-
-        gen_label_ids, _ = self.re_tokenize(gen_label_ids, device)
 
         for l in range(len(output_list)):
             output_ids, attention_mask = self.re_tokenize(output_list[l], device)
 
             # context labels needed for ce loss for context
+            # TODO: use gen ids instead of output ids?
             # get only context label tokens -> model always generates context first
             all_tokens = self.tokenizer.batch_decode(output_ids)
             context_tokens = [t.split(self.tokenizer.sep_token)[0] for t in all_tokens]
@@ -157,20 +177,9 @@ class PPOTrainer(RLTrainer):
             ]
             context_label_ids = torch.tensor(context_label_ids).to(device)
 
-            # get only gen tokens
-            gen_tokens = [t.split(self.tokenizer.sep_token)[1] for t in all_tokens]
-            tokenized_gen = self.tokenizer(
-                [g+self.tokenizer.eos_token for g in gen_tokens],
-                padding='max_length',
-                max_length=self.config.max_input_length,
-                return_tensors='pt',
-            ).to(device)
-            gen_ids = tokenized_gen['input_ids']
-
             # collect into dict
             rl_inputs['output_ids_list'].append(output_ids)
             rl_inputs['attention_mask_list'].append(attention_mask)
-            rl_inputs['gen_ids_list'].append(gen_ids)
             rl_inputs['context_label_ids_list'].append(context_label_ids)
 
         rl_inputs['gen_label_ids'] = gen_label_ids
@@ -195,9 +204,8 @@ class PPOTrainer(RLTrainer):
 
         # change padding from left to right
         # output_ids -> context ids + generated action ids
-        # attention mask -> attention mask for generated_ids
-        # gen_ids -> generated action ids
-        # gen_label_ids -> label action ids
+        # attention mask -> attention mask for output_ids
+        # gen_label_ids -> context_ids + label action ids
         # context_label_ids -> context ids, needed to compute ce loss for context
         # TODO: involves gpu -> cpu -> gpu: can we speed this up?
         rl_inputs = self.prepare_input_for_ppo_step(
@@ -211,7 +219,6 @@ class PPOTrainer(RLTrainer):
             output_ids = rl_inputs['output_ids_list'][m].to(self.accelerator.device)
             attention_mask = rl_inputs['attention_mask_list'][m].to(self.accelerator.device)
             # can be on cpu
-            gen_ids = rl_inputs['gen_ids_list'][m].to(device)
             gen_label_ids = rl_inputs['gen_label_ids'][m*mini_batch_size:(m+1)*mini_batch_size].to(device)
             context_label_ids = rl_inputs['context_label_ids_list'][m].to(device)
 
@@ -237,7 +244,12 @@ class PPOTrainer(RLTrainer):
             values = self.zero_out_logits(values, context_label_ids, attention_mask)
 
             # scores
-            score, score_mask = self.score_function(gen_ids, gen_label_ids, metric='acc')
+            score, score_mask = self.score_function(
+                output_ids,
+                gen_label_ids,
+                context_label_ids,
+                metric='acc'
+            )
 
             # append to list
             logprob_list.append(logprob)
@@ -274,29 +286,56 @@ class PPOTrainer(RLTrainer):
         return logits
 
 
-    def score_function(self, gen_ids, gen_label_ids, metric='acc'):
+    def score_function(self, output_ids, gen_label_ids, context_label_ids, metric='acc'):
         # calculate score per time step
 
         if metric == 'acc':
-            score = (gen_ids == gen_label_ids).type(torch.float)
-            # zero out padding positions
+            score = (output_ids == gen_label_ids).type(torch.float)
+            # zero out context and padding positions
+            score[context_label_ids != self.config.ignore_index] = 0
             score[gen_label_ids == self.tokenizer.pad_token_id] = 0
-            # needed to discard padding scores
-            score_mask = gen_label_ids.detach().clone()
-            score_mask[score_mask == self.tokenizer.pad_token_id] = 0
-            score_mask[score_mask != 0] = 1
+            
+            # score mask
+            score_mask = torch.ones_like(score).to(score.device)
+            score_mask[context_label_ids != self.config.ignore_index] = 0
+            score_mask[gen_label_ids == self.tokenizer.pad_token_id] = 0
 
         elif metric == 'incr_acc':
             pass
+
         else:
             raise ValueError('Incorrect metric passed to score function')
+        
         return score, score_mask
     
 
     def compute_rewards(self, forward_dict, kl_penalty=True):
+        # https://arxiv.org/pdf/1909.08593 -> equation 2
+
+        # TODO: logits and rewards are not aligned!
+
         # logit_list, logprob_list, ref_logprob_list
         # value_list, score_list, score_mask_list
-        pass
+        batch_size = self.config.batch_size
+        mini_batch_size = self.config.mini_batch_size
+        num_m_batches = batch_size//mini_batch_size
+
+        for m in range(num_m_batches):
+            logprobs = forward_dict['logprob_list'][m]
+            ref_logprobs = forward_dict['ref_logprob_list'][m]
+
+            kl = logprobs - ref_logprobs
+            rewards = -self.kl_controller.value * kl
+            print(rewards)
+            quit()
+
+        for i, num_right_mask in enumerate(num_right_masks):
+            if num_right_mask != 0:
+                rewards[i, -num_right_mask-1] += scores[i]
+            else:
+                rewards[:, -1] += scores[i]
+            
+        return rewards, non_score_reward, self.kl_ctl.value
 
 
     def step(self, batch, low_mem=False):
