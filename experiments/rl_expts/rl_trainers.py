@@ -227,11 +227,11 @@ class PPOTrainer(RLTrainer):
 
         # needs to be on gpu for forward
         # TODO: how to split into minibatches?
-        output_ids = rl_inputs['output_ids_list'].to(self.accelerator.device)
-        attention_mask = rl_inputs['attention_mask_list'].to(self.accelerator.device)
+        output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
+        attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
         # can be on cpu
         gen_label_ids = rl_inputs['gen_label_ids'].to(device)
-        context_label_ids = rl_inputs['context_label_ids_list'].to(device)
+        context_label_ids = rl_inputs['context_label_ids'].to(device)
 
         # need to do iteratively for large batch sizes
         # output = (lm_logits, loss=None, value)
@@ -254,7 +254,7 @@ class PPOTrainer(RLTrainer):
                 print(ref_logits.shape)
                 print(values.shape)
                 quit()
-                
+
                 # append to list
                 logit_list.append(logits)
                 ref_logit_list.append(ref_logits)
