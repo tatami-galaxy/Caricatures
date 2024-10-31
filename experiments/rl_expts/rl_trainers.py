@@ -259,6 +259,8 @@ class PPOTrainer(RLTrainer):
             score_list.append(score)
             score_mask_list.append(score_mask)
 
+        # TODO: stack tensors?
+
         forward_dict = {
             'logit_list': logit_list,
             'logprob_list': logprob_list,
@@ -323,16 +325,11 @@ class PPOTrainer(RLTrainer):
             score = forward_dict['score_list'][m]
             score_mask = forward_dict['score_mask_list'][m]
 
-            kl = logprobs - ref_logprobs
-            rewards = -self.kl_controller.value * kl
-            print(rewards)
+            kl = logprobs - ref_logprobs  # will be zero initially
+            reward = -self.kl_controller.value * kl
+            reward = reward + score
+            print(reward)
             quit()
-
-        for i, num_right_mask in enumerate(num_right_masks):
-            if num_right_mask != 0:
-                rewards[i, -num_right_mask-1] += scores[i]
-            else:
-                rewards[:, -1] += scores[i]
             
         return rewards, non_score_reward, self.kl_ctl.value
 
