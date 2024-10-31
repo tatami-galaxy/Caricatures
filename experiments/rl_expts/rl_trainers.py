@@ -111,6 +111,19 @@ class PPOTrainer(RLTrainer):
         )
 
 
+    def pad_and_stack(self, tensor_list, side='right'):
+        # get list of all tensors
+        all_tensors = [t[i] for t in tensor_list for i in range(t.shape[0])]
+        # pad and stack
+        tensor_ids = pad_sequence(
+            all_tensors,
+            batch_first=True,
+            padding_value=self.tokenizer.pad_token_id,
+            padding_side=side,
+        )
+        return tensor_ids
+
+
     # sample batch -> input_ids, attention_mask, labels
     def sample_batch(self, batch):
 
@@ -141,17 +154,8 @@ class PPOTrainer(RLTrainer):
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
         
-        # stack output_list
-        # tensors of different length
-        # get list of all tensors
-        all_tensors = [o[i] for o in output_list for i in range(o.shape[0])]
-        # pad and stack
-        output_ids = pad_sequence(
-            all_tensors,
-            batch_first=True,
-            padding_value=self.tokenizer.pad_token_id,
-            padding_side='left',
-        )
+        # stack output_list -> tensors of different length
+        output_ids = self.pad_and_stack(output_list, side='left')
 
         return output_ids, label_ids
     
@@ -226,7 +230,6 @@ class PPOTrainer(RLTrainer):
         )
 
         # needs to be on gpu for forward
-        # TODO: how to split into minibatches?
         output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
         attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
         # can be on cpu
@@ -245,34 +248,34 @@ class PPOTrainer(RLTrainer):
                     input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size],
                     attention_mask=attention_mask[m*mini_batch_size:(m+1)*mini_batch_size]
                 )
-                # gather from accelerator
-                logits = self.gather_from_acc(logits)
-                ref_logits = self.gather_from_acc(ref_logits)
-                values = self.gather_from_acc(values)
+            # gather from accelerator
+            logits = self.gather_from_acc(logits)
+            ref_logits = self.gather_from_acc(ref_logits)
+            values = self.gather_from_acc(values)
 
-                print(logits.shape)
-                print(ref_logits.shape)
-                print(values.shape)
-                quit()
+            # append to list
+            logit_list.append(logits)
+            ref_logit_list.append(ref_logits)
+            values_list.append(values)
 
-                # append to list
-                logit_list.append(logits)
-                ref_logit_list.append(ref_logits)
-                values_list.append(values)
+        # stack lists
+        logits = self.pad_and_stack(logit_list)
+        ref_logits = self.pad_and_stack(ref_logit_list)
+        values = self.pad_and_stack(values_list)
 
         # make sure same device
         output_ids = output_ids.to(device)
         attention_mask = attention_mask.to(device)
         logits = logits.to(device)
-        values = values.to(device)
         ref_logits = ref_logits.to(device)
+        values = values.to(device)
 
-        logprob = self.logprobs_from_logits(logits, gen_label_ids)
-        ref_logprob = self.logprobs_from_logits(ref_logits, gen_label_ids)
+        logprobs = self.logprobs_from_logits(logits, gen_label_ids)
+        ref_logprobs = self.logprobs_from_logits(ref_logits, gen_label_ids)
 
         # zero out
-        logprob = self.zero_out_logits(logprob, context_label_ids, attention_mask)
-        ref_logprob = self.zero_out_logits(ref_logprob, context_label_ids, attention_mask)
+        logprobs = self.zero_out_logits(logprobs, context_label_ids, attention_mask)
+        ref_logprobs = self.zero_out_logits(ref_logprobs, context_label_ids, attention_mask)
         logits = self.zero_out_logits(logits, context_label_ids, attention_mask)
         values = self.zero_out_logits(values, context_label_ids, attention_mask)
 
@@ -284,21 +287,13 @@ class PPOTrainer(RLTrainer):
             metric='acc'
         )
 
-        # append to list
-        logprob_list.append(logprob)
-        ref_logprob_list.append(ref_logprob)
-        logit_list.append(logits)
-        value_list.append(values)
-        score_list.append(score)
-        score_mask_list.append(score_mask)
-
         forward_dict = {
-            'logit_list': logit_list,
-            'logprob_list': logprob_list,
-            'ref_logprob_list': ref_logprob_list,
-            'value_list': value_list,
-            'score_list': score_list,
-            'score_mask_list': score_mask_list,
+            'logits': logits,
+            'logprobs': logprobs,
+            'ref_logprobs': ref_logprobs,
+            'values': values,
+            'score': score,
+            'score_mask': score_mask,
         }
 
         return forward_dict
@@ -343,23 +338,28 @@ class PPOTrainer(RLTrainer):
 
     def compute_rewards(self, forward_dict, kl_penalty=True):
         # https://arxiv.org/pdf/1909.08593 -> equation 2
-        # logit_list, logprob_list, ref_logprob_list
-        # value_list, score_list, score_mask_list
+        # logits, logprobs, ref_logprobs
+        # values, score, score_mask
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
         num_m_batches = batch_size//mini_batch_size
 
-        for m in range(num_m_batches):
-            logprobs = forward_dict['logprob_list'][m]
-            ref_logprobs = forward_dict['ref_logprob_list'][m]
-            score = forward_dict['score_list'][m]
-            score_mask = forward_dict['score_mask_list'][m]
+        logprobs = forward_dict['logprobs']
+        ref_logprobs = forward_dict['ref_logprobs']
+        score = forward_dict['score']
+        score_mask = forward_dict['score_mask']
 
-            kl = logprobs - ref_logprobs  # will be zero initially
-            reward = -self.kl_controller.value * kl
-            reward = reward + score
-            print(reward)
-            quit()
+        print(logprobs.shape)
+        print(ref_logprobs.shape)
+        print(score.shape)
+        print(score_mask.shape)
+        quit()
+
+        kl = logprobs - ref_logprobs  # will be zero initially
+        reward = -self.kl_controller.value * kl
+        reward = reward + score
+        print(reward)
+        quit()
             
         return reward
 
@@ -373,7 +373,7 @@ class PPOTrainer(RLTrainer):
 
         ## forward pass with generated ids (+context) ##
         # lists with minibatch outputs
-        # logit_list, logprob_list, ref_logprob_list, value_list, score_list
+        # logits, logprobs, ref_logprobs, values, score, score_mask
         forward_dict = self.forward_with_gen_samples(output_ids, label_ids, low_mem)
         
         ## compute rewards ##
