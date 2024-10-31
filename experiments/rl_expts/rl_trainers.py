@@ -20,6 +20,7 @@ class PPOConfig:
     init_kl_coef: float =  0.2
     target: float = 6.0
     horizon: float = 10000
+    ppo_epoch: int = 5
 
 
 class AdaptiveKLController:
@@ -164,8 +165,7 @@ class PPOTrainer(RLTrainer):
     def prepare_input_for_ppo_step(self, output_ids, gen_label_ids, device):
 
         output_ids, attention_mask = self.re_tokenize(output_ids, device)
-        # context labels needed for ce loss for context
-        # TODO: use gen ids instead of output ids?
+        # context labels needed for ce loss for context -> TODO: use gen ids instead of output ids?
         # get only context label tokens -> model always generates context first
         all_tokens = self.tokenizer.batch_decode(output_ids)
         context_tokens = [t.split(self.tokenizer.sep_token)[0] for t in all_tokens]
@@ -230,6 +230,14 @@ class PPOTrainer(RLTrainer):
         )
 
         # needs to be on gpu for forward
+        # TODO: convert to list and put onto accelerator one at a time
+
+        output_ids = rl_inputs['output_ids']
+        attention_mask = rl_inputs['attention_mask']
+        print(output_ids.shape)
+        print(attention_mask.shape)
+        quit()
+
         output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
         attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
         # can be on cpu
@@ -340,22 +348,42 @@ class PPOTrainer(RLTrainer):
         # https://arxiv.org/pdf/1909.08593 -> equation 2
         # logits, logprobs, ref_logprobs
         # values, score, score_mask
-        batch_size = self.config.batch_size
-        mini_batch_size = self.config.mini_batch_size
-        num_m_batches = batch_size//mini_batch_size
 
         logprobs = forward_dict['logprobs']
         ref_logprobs = forward_dict['ref_logprobs']
         score = forward_dict['score']
-        score_mask = forward_dict['score_mask']
 
-        kl = logprobs - ref_logprobs  # will be zero initially
-        reward = -self.kl_controller.value * kl
-        reward = reward + score
-        print(reward)
-        quit()
+        if kl_penalty:
+            kl = logprobs - ref_logprobs  # will be zero initially
+            reward = -self.kl_controller.value * kl
+            reward = reward + score
+        else:
+            reward = score
             
         return reward
+    
+
+    def train_minibatch(self):
+        lastgaelam = 0
+        advantages_reversed = []
+
+        # eq 11 and eq 12 from https://arxiv.org/pdf/1707.06347
+        with torch.no_grad():
+            nextvalues = values.roll(-1, dims=-1)
+            nextvalues[:, -1] = 0
+            delta = rewards + self.args.gamma * nextvalues - values
+            for t in reversed(range(gen_len)):
+                # nextvalues = values[:, t + 1] if (t < gen_len) else 0.0
+                # delta = rewards[:, t] + self.args.gamma * nextvalues - values[:, t]
+                if t < num_ce_tokens:
+                    # Handle CE from Mixer
+                    advantages_reversed.append(torch.zeros(
+                        values.shape[0], dtype=torch.float, device=values.device))
+                else:
+                    lastgaelam = delta[:, t] + \
+                        self.args.gamma * self.args.lam * lastgaelam
+                    advantages_reversed.append(lastgaelam)
+            advantages = torch.stack(advantages_reversed[::-1]).transpose(0, 1)
 
 
     def step(self, batch, low_mem=False):
@@ -371,10 +399,8 @@ class PPOTrainer(RLTrainer):
         forward_dict = self.forward_with_gen_samples(output_ids, label_ids, low_mem)
         
         ## compute rewards ##
-        self.compute_rewards(forward_dict)
-
-        # loop
+        reward = self.compute_rewards(forward_dict)
         
-        #   sample minibatch
-
-        #   update policy
+        ## run minibatches and update policy ##
+        for _ in range(self.config.ppo_epochs):
+            self.train_minibatch()
