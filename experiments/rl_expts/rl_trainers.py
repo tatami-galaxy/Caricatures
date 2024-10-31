@@ -230,11 +230,9 @@ class PPOTrainer(RLTrainer):
         )
 
         # needs to be on gpu for forward
-        #output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
-        #attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
+        output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
+        attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
         # can be on cpu
-        output_ids = rl_inputs['output_ids'].to(device)
-        attention_mask = rl_inputs['attention_mask'].to(device)
         gen_label_ids = rl_inputs['gen_label_ids'].to(device)
         context_label_ids = rl_inputs['context_label_ids'].to(device)
 
@@ -243,12 +241,12 @@ class PPOTrainer(RLTrainer):
         for m in range(num_m_batches):
             with torch.no_grad():
                 logits, _, values = self.model(
-                    input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size].to(self.accelerator.device),
-                    attention_mask=attention_mask[m*mini_batch_size:(m+1)*mini_batch_size].to(self.accelerator.device)
+                    input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size],
+                    attention_mask=attention_mask[m*mini_batch_size:(m+1)*mini_batch_size]
                 )
                 ref_logits, _, _ = self.ref_model(
-                    input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size].to(self.accelerator.device),
-                    attention_mask=attention_mask[m*mini_batch_size:(m+1)*mini_batch_size].to(self.accelerator.device)
+                    input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size],
+                    attention_mask=attention_mask[m*mini_batch_size:(m+1)*mini_batch_size]
                 )
             # gather from accelerator
             logits = self.gather_from_acc(logits)
