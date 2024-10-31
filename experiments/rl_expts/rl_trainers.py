@@ -145,7 +145,7 @@ class PPOTrainer(RLTrainer):
     def prepare_input_for_ppo_step(self, output_list, gen_label_ids, device):
         # output_ids -> context ids + generated action ids
         # attention mask -> attention mask for output_ids
-        # TODO: gen_label_ids -> context_ids + label action ids
+        # gen_label_ids -> context_ids + label action ids
         # context_label_ids -> context ids, needed to compute ce loss for context
         rl_inputs = {
             'output_ids_list': [],
@@ -311,9 +311,6 @@ class PPOTrainer(RLTrainer):
 
     def compute_rewards(self, forward_dict, kl_penalty=True):
         # https://arxiv.org/pdf/1909.08593 -> equation 2
-
-        # TODO: logits and rewards are not aligned!
-
         # logit_list, logprob_list, ref_logprob_list
         # value_list, score_list, score_mask_list
         batch_size = self.config.batch_size
@@ -323,6 +320,14 @@ class PPOTrainer(RLTrainer):
         for m in range(num_m_batches):
             logprobs = forward_dict['logprob_list'][m]
             ref_logprobs = forward_dict['ref_logprob_list'][m]
+            score = forward_dict['score_list'][m]
+            score_mask = forward_dict['score_mask_list'][m]
+
+            print(logprobs[0])
+            print(ref_logprobs[0])
+            print(score[0])
+            print(score_mask[0])
+            quit()
 
             kl = logprobs - ref_logprobs
             rewards = -self.kl_controller.value * kl
