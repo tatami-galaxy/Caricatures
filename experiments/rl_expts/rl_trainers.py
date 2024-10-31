@@ -139,10 +139,13 @@ class PPOTrainer(RLTrainer):
             )
         
         # stack output_list
-        print(output_list[0])
-        print(output_list[0].shape)
-        print(output_list[1].shape)
-        print(output_list[2].shape)
+        output_ids = torch.nn.utils.rnn.pad_sequence(
+            output_list,
+            batch_first=True,
+            padding_value=self.tokenizer.pad_token_id, padding_side='left')
+        print(output_ids[0])
+        print(output_ids[1])
+        print(output_ids.shape)
         quit()
         
         return output_list, label_ids
