@@ -146,8 +146,17 @@ class PPOTrainer(RLTrainer):
         # get list of all tensors
         all_tensors = [o[i] for o in output_list for i in range(o.shape[0])]
         
-        pad_sequence()
-
+        output_ids = pad_sequence(
+            all_tensors,
+            batch_first=True,
+            padding_value=self.tokenizer.pad_token_id,
+            padding_side='left',
+        )
+        print(output_ids[0])
+        print(output_ids[1])
+        print(output_ids.shape)
+        print(output_ids[0].shape)
+        print(output_ids[37].shape)
         quit()
 
         
