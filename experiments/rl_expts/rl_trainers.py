@@ -235,7 +235,7 @@ class PPOTrainer(RLTrainer):
 
         # need to do iteratively for large batch sizes
         # output = (lm_logits, loss=None, value)
-        for m in num_m_batches:
+        for m in range(num_m_batches):
             with torch.no_grad():
                 logits, _, values = self.model(
                     input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size],
