@@ -134,16 +134,13 @@ class PPOTrainer(RLTrainer):
                 self.accelerator.pad_across_processes(
                     output_ids, dim=1, pad_index=self.tokenizer.pad_token_id)
             )
+            # unsqueze to use pad_sequence later
             output_list.append(torch.unsqueeze(output_ids, dim=1))
 
         label_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
-        
-        print(output_list[0].shape)
-        print(output_list[1].shape)
-        quit()
         
         # stack output_list
         output_ids = pad_sequence(
