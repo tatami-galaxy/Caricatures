@@ -144,7 +144,11 @@ class PPOTrainer(RLTrainer):
         # stack output_list
         # tensors of different length
         # get list of all tensors
-        print([o.shape for o in output_list])
+        all_tensors = [[o[i] for i in range(o.shape[0])] for o in output_list]
+        print(len(all_tensors))
+        print(all_tensors[0])
+        print(all_tensors[0].shape)
+        print(all_tensors[1].shape)
         quit()
 
         
