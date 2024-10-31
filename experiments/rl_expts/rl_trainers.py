@@ -1,9 +1,12 @@
-import numpy as np
-import torch
-import torch.nn.functional as F
-from trl import AutoModelForCausalLMWithValueHead
 from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
+
+import torch
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
+from trl import AutoModelForCausalLMWithValueHead
 
 
 @dataclass
@@ -131,18 +134,24 @@ class PPOTrainer(RLTrainer):
                 self.accelerator.pad_across_processes(
                     output_ids, dim=1, pad_index=self.tokenizer.pad_token_id)
             )
-            output_list.append(output_ids)
+            output_list.append(torch.unsqueeze(output_ids, dim=1))
 
         label_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
         
+        print(output_list[0].shape)
+        print(output_list[1].shape)
+        quit()
+        
         # stack output_list
-        output_ids = torch.nn.utils.rnn.pad_sequence(
+        output_ids = pad_sequence(
             output_list,
             batch_first=True,
-            padding_value=self.tokenizer.pad_token_id, padding_side='left')
+            padding_value=self.tokenizer.pad_token_id,
+            padding_side='left'
+        )
         print(output_ids[0])
         print(output_ids[1])
         print(output_ids.shape)
