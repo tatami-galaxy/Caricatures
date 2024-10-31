@@ -134,8 +134,7 @@ class PPOTrainer(RLTrainer):
                 self.accelerator.pad_across_processes(
                     output_ids, dim=1, pad_index=self.tokenizer.pad_token_id)
             )
-            # transpose to use pad_sequence later
-            output_list.append(output_ids.T)
+            output_list.append(output_ids)
 
         label_ids = self.accelerator.gather(
                 self.accelerator.pad_across_processes(
@@ -143,17 +142,11 @@ class PPOTrainer(RLTrainer):
             )
         
         # stack output_list
-        output_ids = pad_sequence(
-            output_list,
-            #batch_first=True,
-            padding_value=self.tokenizer.pad_token_id,
-            padding_side='left'
-        )
-
-        print(output_ids[0])
-        print(output_ids[1])
-        print(output_ids.shape)
+        # tensors of different length
+        # get list of all tensors
+        print([o.shape for o in output_list])
         quit()
+
         
         return output_ids, label_ids
     
