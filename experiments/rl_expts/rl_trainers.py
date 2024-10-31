@@ -349,12 +349,6 @@ class PPOTrainer(RLTrainer):
         score = forward_dict['score']
         score_mask = forward_dict['score_mask']
 
-        print(logprobs.shape)
-        print(ref_logprobs.shape)
-        print(score.shape)
-        print(score_mask.shape)
-        quit()
-
         kl = logprobs - ref_logprobs  # will be zero initially
         reward = -self.kl_controller.value * kl
         reward = reward + score
