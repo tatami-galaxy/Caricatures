@@ -139,9 +139,10 @@ class PPOTrainer(RLTrainer):
             )
         
         # stack output_list
-        output_ids = torch.vstack(output_list)
-        print(output_ids)
-        print(output_ids.shape)
+        print(output_list[0])
+        print(output_list[0].shape)
+        print(output_list[1].shape)
+        print(output_list[2].shape)
         quit()
         
         return output_list, label_ids
