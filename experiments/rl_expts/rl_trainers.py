@@ -138,6 +138,12 @@ class PPOTrainer(RLTrainer):
                     batch["labels"], dim=1, pad_index=self.tokenizer.pad_token_id)
             )
         
+        # stack output_list
+        output_ids = torch.vstack(output_list)
+        print(output_ids)
+        print(output_ids.shape)
+        quit()
+        
         return output_list, label_ids
     
 
@@ -331,7 +337,7 @@ class PPOTrainer(RLTrainer):
             print(reward)
             quit()
             
-        return rewards, non_score_reward, self.kl_ctl.value
+        return reward
 
 
     def step(self, batch, low_mem=False):
