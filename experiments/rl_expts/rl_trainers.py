@@ -17,10 +17,13 @@ class PPOConfig:
     ignore_index: int = -100
     generation_config: Any = None
     gen_kwargs: Any = None
+
     init_kl_coef: float =  0.2
     target: float = 6.0
     horizon: float = 10000
-    ppo_epoch: int = 5
+    ppo_epochs: int = 5
+    gamma: float = 1
+    lam: float = 0.95
 
 
 class AdaptiveKLController:
@@ -366,21 +369,19 @@ class PPOTrainer(RLTrainer):
         return rewards
     
 
-    def train_minibatch(self, forward_dict, rewards):
+    def compute_advantages(self, values, rewards):
         lastgaelam = 0
         advantages_reversed = []
-
-        values = forward_dict['values']
-        print(values[0])
-        print(values.shape)
-        print(rewards.shape)
-        quit()
 
         # eq 11 and eq 12 from https://arxiv.org/pdf/1707.06347
         with torch.no_grad():
             nextvalues = values.roll(-1, dims=-1)
             nextvalues[:, -1] = 0
-            delta = rewards + self.args.gamma * nextvalues - values
+            delta = rewards + self.config.gamma * nextvalues - values
+            print(delta[0])
+            print(delta.shape)
+            quit()
+            
             for t in reversed(range(gen_len)):
                 # nextvalues = values[:, t + 1] if (t < gen_len) else 0.0
                 # delta = rewards[:, t] + self.args.gamma * nextvalues - values[:, t]
@@ -389,10 +390,14 @@ class PPOTrainer(RLTrainer):
                     advantages_reversed.append(torch.zeros(
                         values.shape[0], dtype=torch.float, device=values.device))
                 else:
-                    lastgaelam = delta[:, t] + \
-                        self.args.gamma * self.args.lam * lastgaelam
+                    lastgaelam = delta[:, t] + self.config.gamma * self.config.lam * lastgaelam
                     advantages_reversed.append(lastgaelam)
             advantages = torch.stack(advantages_reversed[::-1]).transpose(0, 1)
+    
+
+    def train_minibatch(self, forward_dict, rewards):
+        values = forward_dict['values']
+        advantages = self.compute_advantages(values, rewards)
 
 
     def step(self, batch, low_mem=False):
