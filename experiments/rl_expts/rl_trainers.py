@@ -369,7 +369,16 @@ class PPOTrainer(RLTrainer):
         return rewards
     
 
-    def compute_advantages(self, values, rewards):
+    def whiten(values, shift_mean=True):
+        # whiten values
+        mean, var = torch.mean(values), torch.var(values)
+        whitened = (values - mean) * torch.rsqrt(var + 1e-8)
+        if not shift_mean:
+            whitened += mean
+        return whitened
+
+
+    def compute_advantages(self, values, rewards, mask):
         lastgaelam = 0
         # reversed since delta_t depends on delta_t+1, delta_t+2, ...
         advantages_reversed = []
@@ -384,14 +393,24 @@ class PPOTrainer(RLTrainer):
                 # advantage estimate for each timestep (revresed)
                 lastgaelam = delta[:, t] + self.config.gamma * self.config.lam * lastgaelam
                 advantages_reversed.append(lastgaelam)
+
             advantages = torch.stack(advantages_reversed[::-1]).transpose(0, 1)
+
+            print(advantages[0])
+            print('')
+            print(mask[0])
             print(advantages.shape)
+            print(mask.shape)
             quit()
+            
+            # mask out context and padding positions
+
     
 
     def train_minibatch(self, forward_dict, rewards):
         values = forward_dict['values']
-        advantages = self.compute_advantages(values, rewards)
+        mask = forward_dict['score_mask']
+        advantages = self.compute_advantages(values, rewards, mask)
 
 
     def step(self, batch, low_mem=False):
