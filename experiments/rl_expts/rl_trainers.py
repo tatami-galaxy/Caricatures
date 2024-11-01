@@ -253,7 +253,7 @@ class PPOTrainer(RLTrainer):
             with torch.no_grad():
                 logits, _, values = self.model(
                     input_ids=output_ids_list[m].to(self.accelerator.device),
-                    attention_mask=attention_mask[m].to(self.accelerator.device)
+                    attention_mask=attention_mask_list[m].to(self.accelerator.device)
                 )
                 ref_logits, _, _ = self.ref_model(
                     input_ids=output_ids_list[m].to(self.accelerator.device),
@@ -358,17 +358,23 @@ class PPOTrainer(RLTrainer):
 
         if kl_penalty:
             kl = logprobs - ref_logprobs  # will be zero initially
-            reward = -self.kl_controller.value * kl
-            reward = reward + score
+            rewards = -self.kl_controller.value * kl
+            rewards = rewards + score
         else:
-            reward = score
+            rewards = score
             
-        return reward
+        return rewards
     
 
-    def train_minibatch(self):
+    def train_minibatch(self, forward_dict, rewards):
         lastgaelam = 0
         advantages_reversed = []
+
+        values = forward_dict['values']
+        print(values[0])
+        print(values.shape)
+        print(rewards.shape)
+        quit()
 
         # eq 11 and eq 12 from https://arxiv.org/pdf/1707.06347
         with torch.no_grad():
@@ -400,13 +406,10 @@ class PPOTrainer(RLTrainer):
         # lists with minibatch outputs
         # logits, logprobs, ref_logprobs, values, score, score_mask
         forward_dict = self.forward_with_gen_samples(output_ids, label_ids, low_mem)
-
-        print('done')
-        quit()
         
         ## compute rewards ##
-        reward = self.compute_rewards(forward_dict)
+        rewards = self.compute_rewards(forward_dict)
         
         ## run minibatches and update policy ##
         for _ in range(self.config.ppo_epochs):
-            self.train_minibatch()
+            self.train_minibatch(forward_dict, rewards)
