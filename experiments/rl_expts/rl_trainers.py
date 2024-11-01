@@ -410,7 +410,7 @@ class PPOTrainer(RLTrainer):
 
 
 
-    def train_minibatch(self, forward_dict, rewards, low_mem=False):
+    def train_minibatch(self, mini_batch, rewards, low_mem=False):
 
         logit_list = []
         vpred_list = []
@@ -420,13 +420,22 @@ class PPOTrainer(RLTrainer):
         num_m_batches = batch_size//mini_batch_size
         device = 'cpu' if low_mem else self.accelerator.device
 
-        output_ids = forward_dict['output_ids']
-        attention_mask = forward_dict['attention_mask']
-        gen_label_ids = forward_dict['gen_label_ids']
-        context_label_ids = forward_dict['context_label_ids']
-        old_logprobs = forward_dict['logprobs']
-        values = forward_dict['values']
-        score_mask = forward_dict['score_mask']
+        output_ids = mini_batch['output_ids']
+        attention_mask = mini_batch['attention_mask']
+        gen_label_ids = mini_batch['gen_label_ids']
+        context_label_ids = mini_batch['context_label_ids']
+        old_logprobs = mini_batch['logprobs']
+        values = mini_batch['values']
+        score_mask = mini_batch['score_mask']
+
+        print(output_ids.shape)
+        print(attention_mask.shape)
+        print(gen_label_ids.shape)
+        print(context_label_ids.shape)
+        print(old_logprobs.shape)
+        print(values.shape)
+        print(score_mask.shape)
+        quit()
 
         # compute advantages
         advantages = self.compute_advantages(values, rewards, score_mask)
@@ -501,13 +510,6 @@ class PPOTrainer(RLTrainer):
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
 
-        print(vf_loss[0])
-        print(pg_loss[0])
-        print(pg_loss.shape)
-        print(vf_loss.shape)
-        print('okay')
-        quit()
-
         # cross entropy loss for context
 
 
@@ -515,13 +517,16 @@ class PPOTrainer(RLTrainer):
 
     def step(self, batch, low_mem=False):
 
+        batch_size = self.config.batch_size
+        mini_batch_size = self.config.mini_batch_size
+        num_m_batches = batch_size//mini_batch_size
+
         ## sample batch ##
         # output_ids -> context ids + generated action ids
         # gen_label_ids -> context_ids + label action ids
         output_ids, label_ids = self.sample_batch(batch)
 
         ## forward pass with generated ids (+context) ##
-        # lists with minibatch outputs
         # output_ids, attention_mask
         # gen_label_ids, context_label_ids,
         # logprobs, ref_logprobs, values, 
@@ -533,4 +538,9 @@ class PPOTrainer(RLTrainer):
         
         ## run minibatches and update policy ##
         for _ in range(self.config.ppo_epochs):
-            self.train_minibatch(forward_dict, rewards, low_mem)
+            # TODO: pass minibatch instead of whole batch
+            for m in range(num_m_batches):
+                mini_batch = {
+                    k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in batch.items()
+                }
+                self.train_minibatch(mini_batch, rewards, low_mem)
