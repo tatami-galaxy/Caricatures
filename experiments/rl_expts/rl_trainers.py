@@ -24,6 +24,9 @@ class PPOConfig:
     ppo_epochs: int = 5
     gamma: float = 1
     lam: float = 0.95
+    cliprange_value: float = 0.2
+    cliprange: float = 0.2
+    vf_coef: float = 0.1
 
 
 class AdaptiveKLController:
@@ -284,7 +287,7 @@ class PPOTrainer(RLTrainer):
         # zero out
         logprobs = self.zero_out_logits(logprobs, context_label_ids, attention_mask)
         ref_logprobs = self.zero_out_logits(ref_logprobs, context_label_ids, attention_mask)
-        logits = self.zero_out_logits(logits, context_label_ids, attention_mask)
+        #logits = self.zero_out_logits(logits, context_label_ids, attention_mask)
         values = self.zero_out_logits(values, context_label_ids, attention_mask)
 
         # scores
@@ -298,7 +301,9 @@ class PPOTrainer(RLTrainer):
         forward_dict = {
             'output_ids': output_ids,
             'attention_mask': attention_mask,
-            'logits': logits,
+            'gen_label_ids': gen_label_ids,
+            'context_label_ids': context_label_ids,
+            #'logits': logits,
             'logprobs': logprobs,
             'ref_logprobs': ref_logprobs,
             'values': values,
@@ -348,10 +353,6 @@ class PPOTrainer(RLTrainer):
 
     def compute_rewards(self, forward_dict, kl_penalty=True):
         # https://arxiv.org/pdf/1909.08593 -> equation 2
-        # output_ids,  attention_mask
-        # logits, logprobs, ref_logprobs, values 
-        # score, score_mask
-
         logprobs = forward_dict['logprobs']
         ref_logprobs = forward_dict['ref_logprobs']
         score = forward_dict['score']
@@ -374,6 +375,13 @@ class PPOTrainer(RLTrainer):
         if not shift_mean:
             whitened += mean
         return whitened
+    
+
+    def clip_by_value(self, x, tensor_min, tensor_max):
+        # tensor extenstion to torch.clamp 
+        # https://github.com/pytorch/pytorch/issues/2793#issuecomment-428784713
+        clipped = torch.max(torch.min(x, tensor_max), tensor_min)
+        return clipped
 
 
     def compute_advantages(self, values, rewards, mask):
@@ -381,7 +389,7 @@ class PPOTrainer(RLTrainer):
         # reversed since delta_t depends on delta_t+1, delta_t+2, ...
         advantages_reversed = []
 
-        # eq 11 and eq 12 from https://arxiv.org/pdf/1707.06347
+        # eq 11 and eq 12 ppo paper : https://arxiv.org/pdf/1707.06347
         with torch.no_grad():
             nextvalues = values.roll(-1, dims=-1)
             nextvalues[:, -1] = 0
@@ -402,19 +410,26 @@ class PPOTrainer(RLTrainer):
 
 
 
-    def train_minibatch(self, forward_dict, rewards):
+    def train_minibatch(self, forward_dict, rewards, low_mem=False):
+
+        logit_list = []
+        vpred_list = []
 
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
         num_m_batches = batch_size//mini_batch_size
+        device = 'cpu' if low_mem else self.accelerator.device
 
         output_ids = forward_dict['output_ids']
         attention_mask = forward_dict['attention_mask']
+        gen_label_ids = forward_dict['gen_label_ids']
+        context_label_ids = forward_dict['context_label_ids']
+        old_logprobs = forward_dict['logprobs']
         values = forward_dict['values']
         score_mask = forward_dict['score_mask']
 
         # compute advantages
-        advantages = self.compute_advantages(values, rewards, score_mask, attention_mask)
+        advantages = self.compute_advantages(values, rewards, score_mask)
 
         # model forward
         output_ids_list = [
@@ -426,13 +441,76 @@ class PPOTrainer(RLTrainer):
         # need to do iteratively for large batch sizes
         # output = (lm_logits, loss=None, value)
         for m in range(num_m_batches):
-            logits, _, values = self.model(
+            logits, _, vpred = self.model(
                 input_ids=output_ids_list[m].to(self.accelerator.device),
                 attention_mask=attention_mask_list[m].to(self.accelerator.device)
             )
+            # gather from accelerator
+            logits = self.gather_from_acc(logits)
+            vpred = self.gather_from_acc(vpred)
 
-        print('works')
+            # append to list
+            logit_list.append(logits)
+            vpred_list.append(vpred)
+
+        # stack lists
+        logits = self.pad_and_stack(logit_list)
+        vpred = self.pad_and_stack(vpred_list)
+
+        # make sure same device
+        output_ids = output_ids.to(device)
+        attention_mask = attention_mask.to(device)
+        context_label_ids = context_label_ids.to(device)
+        logits = logits.to(device)
+        values = values.to(device)
+
+        # logprobs
+        logprobs = self.logprobs_from_logits(logits, gen_label_ids)
+
+        # zero out
+        logprobs = self.zero_out_logits(logprobs, context_label_ids, attention_mask)
+        vpred = self.zero_out_logits(vpred, context_label_ids, attention_mask)
+
+        # calculate value function loss
+        vpred_clipped = self.clip_by_value(
+            vpred,
+            values - self.config.cliprange_value,
+            values + self.config.cliprange_value
+        )
+        # TODO: what is return?
+        returns = advantages + values
+        # equation 9 ppo paper : https://arxiv.org/pdf/1707.06347
+        vf_losses1 = (vpred - returns)**2
+        vf_losses2 = (vpred_clipped - returns)**2
+        # clamped loss following DQL
+        # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
+        vf_loss = .5 * torch.mean(
+            torch.clamp(torch.max(vf_losses1, vf_losses2), min=-1, max=1)
+        )
+        vf_clipfrac =  torch.mean(torch.gt(vf_losses2, vf_losses1).double())
+
+        # calculate policy gradient loss
+        # importance sampling ratio
+        ratio = torch.exp(logprobs - old_logprobs)
+        # clipping surrogate, section 6.1 ppo paper
+        # https://arxiv.org/pdf/1707.06347
+        pg_losses = -advantages * ratio
+        pg_losses2 = -advantages * torch.clamp(
+            ratio,
+            1.0 - self.config.cliprange,
+            1.0 + self.config.cliprange
+        )
+        # clamped loss following DQL
+        # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
+        pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
+
+        print(pg_loss.shape)
+        print(vf_loss.shape)
+        print('okay')
         quit()
+
+        # cross entropy loss for context
+
 
 
 
@@ -446,7 +524,8 @@ class PPOTrainer(RLTrainer):
         ## forward pass with generated ids (+context) ##
         # lists with minibatch outputs
         # output_ids, attention_mask
-        # logits, logprobs, ref_logprobs, values, 
+        # gen_label_ids, context_label_ids,
+        # logprobs, ref_logprobs, values, 
         # score, score_mask
         forward_dict = self.forward_with_gen_samples(output_ids, label_ids, low_mem)
         
@@ -455,4 +534,4 @@ class PPOTrainer(RLTrainer):
         
         ## run minibatches and update policy ##
         for _ in range(self.config.ppo_epochs):
-            self.train_minibatch(forward_dict, rewards)
+            self.train_minibatch(forward_dict, rewards, low_mem)
