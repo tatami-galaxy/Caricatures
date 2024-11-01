@@ -15,6 +15,7 @@ class PPOConfig:
     mini_batch_size: int = 16
     max_input_length: int = 512
     ignore_index: int = -100
+    epsilon: float = 1e-20
     generation_config: Any = None
     gen_kwargs: Any = None
 
@@ -52,9 +53,6 @@ class RLTrainer:
             tokenizer,
             accelerator,
     ):
-        
-        self.EPSILON = 1e-20
-
         self.config = config
         self.model = model
         self.tokenizer = tokenizer
@@ -310,7 +308,7 @@ class PPOTrainer(RLTrainer):
 
     def logprobs_from_logits(self, logits, labels):
         # https://github.com/pytorch/pytorch/issues/563#issuecomment-330103591
-        logp = torch.log(F.softmax(logits, dim=2) + self.EPSILON)
+        logp = torch.log(F.softmax(logits, dim=2) + self.config.epsilon)
         logpy = torch.gather(logp, 2, labels.unsqueeze(2)).squeeze(-1)
         return logpy
     
@@ -474,14 +472,14 @@ class PPOTrainer(RLTrainer):
         # shift so that tokens < n predict n
         shift_logits = logits[..., :-1, :].contiguous()
         shift_context_labels = context_label_ids[..., 1:].contiguous()
+
+        print(shift_logits.view(-1, shift_logits.size(-1)).shape)
+        print(shift_context_labels.view(-1).shape)
+        quit()
+        
         context_loss = self.ce_loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)), shift_context_labels.view(-1)
         )
-        print(context_loss[0])
-        print(context_loss.shape)
-        quit()
-
-
 
 
 
