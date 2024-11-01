@@ -234,9 +234,10 @@ class PPOTrainer(RLTrainer):
 
         output_ids = rl_inputs['output_ids']
         attention_mask = rl_inputs['attention_mask']
-        print(output_ids.shape)
-        print(attention_mask.shape)
-        quit()
+        output_ids_list = [output_ids[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)]
+        print(len(output_ids_list))
+        print(output_ids_list[0].shape)
+        print(output_ids_list[1].shape)
 
         output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
         attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
