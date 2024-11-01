@@ -415,7 +415,7 @@ class PPOTrainer(RLTrainer):
         values = mini_batch['values']
         score_mask = mini_batch['score_mask']
 
-        # compute advantages
+        # compute advantages (already masked out)
         advantages = self.compute_advantages(values, rewards, score_mask)
 
         # model forward
@@ -467,7 +467,9 @@ class PPOTrainer(RLTrainer):
         # clamped loss following DQL
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
-        # zero out context positions in pg_loss (do we need to again?)
+        # TODO: zero out context positions and padding positions in pg_loss?
+        # compute avg pg_loss to get a scalar loss
+        print(score_mask[0])
         print(pg_loss[0])
         quit()
 
@@ -475,8 +477,7 @@ class PPOTrainer(RLTrainer):
         # shift so that tokens < n predict n
         shift_logits = logits[..., :-1, :].contiguous()
         shift_context_labels = context_label_ids[..., 1:].contiguous()
-
-        context_loss = self.ce_loss_fct(
+        ce_loss = self.ce_loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)), shift_context_labels.view(-1)
         )
 
