@@ -431,7 +431,7 @@ class PPOTrainer(RLTrainer):
 
         # logprobs
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
-        # zero out
+        # zero out context and padding positions
         logprobs = self.zero_out_logits(logprobs, context_label_ids, attention_mask)
         vpred = self.zero_out_logits(vpred, context_label_ids, attention_mask)
 
@@ -467,16 +467,15 @@ class PPOTrainer(RLTrainer):
         # clamped loss following DQL
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
+        # zero out context positions in pg_loss (do we need to again?)
+        print(pg_loss[0])
+        quit()
 
         # cross entropy loss for context
         # shift so that tokens < n predict n
         shift_logits = logits[..., :-1, :].contiguous()
         shift_context_labels = context_label_ids[..., 1:].contiguous()
 
-        print(shift_logits.view(-1, shift_logits.size(-1)).shape)
-        print(shift_context_labels.view(-1).shape)
-        quit()
-        
         context_loss = self.ce_loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)), shift_context_labels.view(-1)
         )
