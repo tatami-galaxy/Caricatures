@@ -232,20 +232,14 @@ class PPOTrainer(RLTrainer):
             device,
         )
 
-        # needs to be on gpu for forward
-        # TODO: convert to list and put onto accelerator one at a time
-
-        output_ids = rl_inputs['output_ids']
-        attention_mask = rl_inputs['attention_mask']
+        output_ids = rl_inputs['output_ids'].to(device)
+        attention_mask = rl_inputs['attention_mask'].to(device)
         output_ids_list = [
             output_ids[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
         ]
         attention_mask_list = [
             attention_mask[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
         ]
-
-        #output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
-        #attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
         # can be on cpu
         gen_label_ids = rl_inputs['gen_label_ids'].to(device)
         context_label_ids = rl_inputs['context_label_ids'].to(device)
@@ -302,6 +296,8 @@ class PPOTrainer(RLTrainer):
         )
 
         forward_dict = {
+            'output_ids': output_ids,
+            'attention_mask': attention_mask,
             'logits': logits,
             'logprobs': logprobs,
             'ref_logprobs': ref_logprobs,
@@ -352,8 +348,9 @@ class PPOTrainer(RLTrainer):
 
     def compute_rewards(self, forward_dict, kl_penalty=True):
         # https://arxiv.org/pdf/1909.08593 -> equation 2
-        # logits, logprobs, ref_logprobs
-        # values, score, score_mask
+        # output_ids,  attention_mask
+        # logits, logprobs, ref_logprobs, values 
+        # score, score_mask
 
         logprobs = forward_dict['logprobs']
         ref_logprobs = forward_dict['ref_logprobs']
@@ -369,7 +366,8 @@ class PPOTrainer(RLTrainer):
         return rewards
     
 
-    def whiten(values, shift_mean=True):
+    # TODO: exclude padding
+    def whiten(self, values, mask, shift_mean=True):
         # whiten values
         mean, var = torch.mean(values), torch.var(values)
         whitened = (values - mean) * torch.rsqrt(var + 1e-8)
@@ -397,20 +395,45 @@ class PPOTrainer(RLTrainer):
 
             # mask out context and padding positions
             advantages = torch.mul(advantages, mask)
+            # whiten -> incorrect implementation. need to ignore padding
+            #advantages = self.whiten(advantages, mask)
 
-            print(advantages[0])
-            print('')
-            print(mask[0])
-            print(advantages.shape)
-            print(mask.shape)
-            quit()
+            return advantages
 
-    
+
 
     def train_minibatch(self, forward_dict, rewards):
+
+        batch_size = self.config.batch_size
+        mini_batch_size = self.config.mini_batch_size
+        num_m_batches = batch_size//mini_batch_size
+
+        output_ids = forward_dict['output_ids']
+        attention_mask = forward_dict['attention_mask']
         values = forward_dict['values']
-        mask = forward_dict['score_mask']
-        advantages = self.compute_advantages(values, rewards, mask)
+        score_mask = forward_dict['score_mask']
+
+        # compute advantages
+        advantages = self.compute_advantages(values, rewards, score_mask, attention_mask)
+
+        # model forward
+        output_ids_list = [
+            output_ids[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
+        ]
+        attention_mask_list = [
+            attention_mask[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
+        ]
+        # need to do iteratively for large batch sizes
+        # output = (lm_logits, loss=None, value)
+        for m in range(num_m_batches):
+            logits, _, values = self.model(
+                input_ids=output_ids_list[m].to(self.accelerator.device),
+                attention_mask=attention_mask_list[m].to(self.accelerator.device)
+            )
+
+        print('works')
+        quit()
+
 
 
     def step(self, batch, low_mem=False):
@@ -422,7 +445,9 @@ class PPOTrainer(RLTrainer):
 
         ## forward pass with generated ids (+context) ##
         # lists with minibatch outputs
-        # logits, logprobs, ref_logprobs, values, score, score_mask
+        # output_ids, attention_mask
+        # logits, logprobs, ref_logprobs, values, 
+        # score, score_mask
         forward_dict = self.forward_with_gen_samples(output_ids, label_ids, low_mem)
         
         ## compute rewards ##
