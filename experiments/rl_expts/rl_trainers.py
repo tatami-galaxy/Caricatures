@@ -428,6 +428,10 @@ class PPOTrainer(RLTrainer):
         values = forward_dict['values']
         score_mask = forward_dict['score_mask']
 
+        for key, val in forward_dict.items():
+            print(val.device)
+        quit()
+
         # compute advantages
         advantages = self.compute_advantages(values, rewards, score_mask)
 
@@ -458,11 +462,8 @@ class PPOTrainer(RLTrainer):
         vpred = self.pad_and_stack(vpred_list)
 
         # make sure same device
-        output_ids = output_ids.to(device)
-        attention_mask = attention_mask.to(device)
-        context_label_ids = context_label_ids.to(device)
         logits = logits.to(device)
-        values = values.to(device)
+        vpred = vpred.to(device)
 
         # logprobs
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
