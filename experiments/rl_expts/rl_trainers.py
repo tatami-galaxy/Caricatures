@@ -371,6 +371,7 @@ class PPOTrainer(RLTrainer):
 
     def compute_advantages(self, values, rewards):
         lastgaelam = 0
+        # reversed since delta_t depends on delta_t+1, delta_t+2, ...
         advantages_reversed = []
 
         # eq 11 and eq 12 from https://arxiv.org/pdf/1707.06347
@@ -378,17 +379,11 @@ class PPOTrainer(RLTrainer):
             nextvalues = values.roll(-1, dims=-1)
             nextvalues[:, -1] = 0
             delta = rewards + self.config.gamma * nextvalues - values
-            print(delta[0])
-            print(delta.shape)
-            quit()
             
             for t in reversed(range(gen_len)):
-                # nextvalues = values[:, t + 1] if (t < gen_len) else 0.0
-                # delta = rewards[:, t] + self.args.gamma * nextvalues - values[:, t]
                 if t < num_ce_tokens:
                     # Handle CE from Mixer
-                    advantages_reversed.append(torch.zeros(
-                        values.shape[0], dtype=torch.float, device=values.device))
+                    advantages_reversed.append(torch.zeros(values.shape[0], dtype=torch.float, device=values.device))
                 else:
                     lastgaelam = delta[:, t] + self.config.gamma * self.config.lam * lastgaelam
                     advantages_reversed.append(lastgaelam)
