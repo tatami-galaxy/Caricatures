@@ -428,10 +428,6 @@ class PPOTrainer(RLTrainer):
         values = forward_dict['values']
         score_mask = forward_dict['score_mask']
 
-        for key, val in forward_dict.items():
-            print(val.device)
-        quit()
-
         # compute advantages
         advantages = self.compute_advantages(values, rewards, score_mask)
 
@@ -505,6 +501,8 @@ class PPOTrainer(RLTrainer):
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
 
+        print(vf_loss[0])
+        print(pg_loss[0])
         print(pg_loss.shape)
         print(vf_loss.shape)
         print('okay')
