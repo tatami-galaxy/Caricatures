@@ -234,13 +234,15 @@ class PPOTrainer(RLTrainer):
 
         output_ids = rl_inputs['output_ids']
         attention_mask = rl_inputs['attention_mask']
-        output_ids_list = [output_ids[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)]
-        print(len(output_ids_list))
-        print(output_ids_list[0].shape)
-        print(output_ids_list[1].shape)
+        output_ids_list = [
+            output_ids[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
+        ]
+        attention_mask_list = [
+            attention_mask[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
+        ]
 
-        output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
-        attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
+        #output_ids = rl_inputs['output_ids'].to(self.accelerator.device)
+        #attention_mask = rl_inputs['attention_mask'].to(self.accelerator.device)
         # can be on cpu
         gen_label_ids = rl_inputs['gen_label_ids'].to(device)
         context_label_ids = rl_inputs['context_label_ids'].to(device)
@@ -250,12 +252,12 @@ class PPOTrainer(RLTrainer):
         for m in range(num_m_batches):
             with torch.no_grad():
                 logits, _, values = self.model(
-                    input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size],
-                    attention_mask=attention_mask[m*mini_batch_size:(m+1)*mini_batch_size]
+                    input_ids=output_ids_list[m].to(self.accelerator.device),
+                    attention_mask=attention_mask[m].to(self.accelerator.device)
                 )
                 ref_logits, _, _ = self.ref_model(
-                    input_ids=output_ids[m*mini_batch_size:(m+1)*mini_batch_size],
-                    attention_mask=attention_mask[m*mini_batch_size:(m+1)*mini_batch_size]
+                    input_ids=output_ids_list[m].to(self.accelerator.device),
+                    attention_mask=attention_mask_list[m].to(self.accelerator.device)
                 )
             # gather from accelerator
             logits = self.gather_from_acc(logits)
@@ -398,6 +400,9 @@ class PPOTrainer(RLTrainer):
         # lists with minibatch outputs
         # logits, logprobs, ref_logprobs, values, score, score_mask
         forward_dict = self.forward_with_gen_samples(output_ids, label_ids, low_mem)
+
+        print('done')
+        quit()
         
         ## compute rewards ##
         reward = self.compute_rewards(forward_dict)
