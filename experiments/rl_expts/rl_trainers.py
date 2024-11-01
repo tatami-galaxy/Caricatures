@@ -235,6 +235,7 @@ class PPOTrainer(RLTrainer):
             device,
         )
 
+        # model forward
         output_ids = rl_inputs['output_ids'].to(device)
         attention_mask = rl_inputs['attention_mask'].to(device)
         output_ids_list = [
@@ -270,24 +271,17 @@ class PPOTrainer(RLTrainer):
             values_list.append(values)
 
         # stack lists
-        logits = self.pad_and_stack(logit_list)
-        ref_logits = self.pad_and_stack(ref_logit_list)
-        values = self.pad_and_stack(values_list)
-
         # make sure same device
-        output_ids = output_ids.to(device)
-        attention_mask = attention_mask.to(device)
-        logits = logits.to(device)
-        ref_logits = ref_logits.to(device)
-        values = values.to(device)
-
+        logits = self.pad_and_stack(logit_list).to(device)
+        ref_logits = self.pad_and_stack(ref_logit_list).to(device)
+        values = self.pad_and_stack(values_list).to(device)
+        # logprobs
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
         ref_logprobs = self.logprobs_from_logits(ref_logits, gen_label_ids)
 
         # zero out
         logprobs = self.zero_out_logits(logprobs, context_label_ids, attention_mask)
         ref_logprobs = self.zero_out_logits(ref_logprobs, context_label_ids, attention_mask)
-        #logits = self.zero_out_logits(logits, context_label_ids, attention_mask)
         values = self.zero_out_logits(values, context_label_ids, attention_mask)
 
         # scores
@@ -303,7 +297,6 @@ class PPOTrainer(RLTrainer):
             'attention_mask': attention_mask,
             'gen_label_ids': gen_label_ids,
             'context_label_ids': context_label_ids,
-            #'logits': logits,
             'logprobs': logprobs,
             'ref_logprobs': ref_logprobs,
             'values': values,
@@ -403,7 +396,7 @@ class PPOTrainer(RLTrainer):
 
             # mask out context and padding positions
             advantages = torch.mul(advantages, mask)
-            # whiten -> incorrect implementation. need to ignore padding
+            # TODO: whiten -> incorrect implementation. need to ignore padding
             #advantages = self.whiten(advantages, mask)
 
             return advantages
@@ -412,12 +405,6 @@ class PPOTrainer(RLTrainer):
 
     def train_minibatch(self, mini_batch, rewards, low_mem=False):
 
-        logit_list = []
-        vpred_list = []
-
-        batch_size = self.config.batch_size
-        mini_batch_size = self.config.mini_batch_size
-        num_m_batches = batch_size//mini_batch_size
         device = 'cpu' if low_mem else self.accelerator.device
 
         output_ids = mini_batch['output_ids']
@@ -444,7 +431,6 @@ class PPOTrainer(RLTrainer):
 
         # logprobs
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
-
         # zero out
         logprobs = self.zero_out_logits(logprobs, context_label_ids, attention_mask)
         vpred = self.zero_out_logits(vpred, context_label_ids, attention_mask)
@@ -482,11 +468,12 @@ class PPOTrainer(RLTrainer):
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
 
-        print(vf_loss)
+        # cross entropy loss for context
         print(pg_loss[0])
+        print('')
+        print(context_label_ids)
         quit()
 
-        # cross entropy loss for context
 
 
 
