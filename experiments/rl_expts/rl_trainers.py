@@ -470,8 +470,6 @@ class PPOTrainer(RLTrainer):
         # TODO: zero out context positions and padding positions in pg_loss?
         # compute avg pg_loss to get a scalar loss
         pg_loss = torch.sum(pg_loss) / torch.sum(score_mask)
-        print(pg_loss)
-        quit()
 
         # cross entropy loss for context
         # shift so that tokens < n predict n
@@ -480,6 +478,15 @@ class PPOTrainer(RLTrainer):
         ce_loss = self.ce_loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)), shift_context_labels.view(-1)
         )
+
+        loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
+
+        # backprop
+        self.accelerator.backward(loss)
+        # TODO: initi optimizer, scheduler
+        optimizer.step()
+        lr_scheduler.step()
+        optimizer.zero_grad()
 
 
 
@@ -512,3 +519,7 @@ class PPOTrainer(RLTrainer):
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 self.train_minibatch(mini_batch, mini_batch_rewards, low_mem)
+        
+        ## housekeeping ##
+        # TODO: what is this?
+        self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
