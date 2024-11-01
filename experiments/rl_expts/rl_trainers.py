@@ -428,47 +428,23 @@ class PPOTrainer(RLTrainer):
         values = mini_batch['values']
         score_mask = mini_batch['score_mask']
 
-        print(output_ids.shape)
-        print(attention_mask.shape)
-        print(gen_label_ids.shape)
-        print(context_label_ids.shape)
-        print(old_logprobs.shape)
-        print(values.shape)
-        print(score_mask.shape)
-        quit()
-
         # compute advantages
         advantages = self.compute_advantages(values, rewards, score_mask)
 
         # model forward
-        output_ids_list = [
-            output_ids[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
-        ]
-        attention_mask_list = [
-            attention_mask[m*mini_batch_size:(m+1)*mini_batch_size] for m in range(num_m_batches)
-        ]
-        # need to do iteratively for large batch sizes
         # output = (lm_logits, loss=None, value)
-        for m in range(num_m_batches):
-            logits, _, vpred = self.model(
-                input_ids=output_ids_list[m].to(self.accelerator.device),
-                attention_mask=attention_mask_list[m].to(self.accelerator.device)
-            )
-            # gather from accelerator
-            logits = self.gather_from_acc(logits)
-            vpred = self.gather_from_acc(vpred)
-
-            # append to list
-            logit_list.append(logits)
-            vpred_list.append(vpred)
-
-        # stack lists
-        logits = self.pad_and_stack(logit_list)
-        vpred = self.pad_and_stack(vpred_list)
-
+        logits, _, vpred = self.model(
+            input_ids=output_ids.to(self.accelerator.device),
+            attention_mask=attention_mask.to(self.accelerator.device)
+        )
+        # gather from accelerator
         # make sure same device
-        logits = logits.to(device)
-        vpred = vpred.to(device)
+        logits = self.gather_from_acc(logits).to(device)
+        vpred = self.gather_from_acc(vpred).to(device)
+
+        print(logits.shape)
+        print(vpred.shape)
+        quit()
 
         # logprobs
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
@@ -538,9 +514,8 @@ class PPOTrainer(RLTrainer):
         
         ## run minibatches and update policy ##
         for _ in range(self.config.ppo_epochs):
-            # TODO: pass minibatch instead of whole batch
             for m in range(num_m_batches):
                 mini_batch = {
-                    k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in batch.items()
+                    k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in forward_dict.items()
                 }
                 self.train_minibatch(mini_batch, rewards, low_mem)
