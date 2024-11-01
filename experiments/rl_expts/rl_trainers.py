@@ -469,8 +469,8 @@ class PPOTrainer(RLTrainer):
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
         # TODO: zero out context positions and padding positions in pg_loss?
         # compute avg pg_loss to get a scalar loss
-        print(score_mask[0])
-        print(pg_loss[0])
+        pg_loss = torch.sum(pg_loss) / torch.sum(score_mask)
+        print(pg_loss)
         quit()
 
         # cross entropy loss for context
