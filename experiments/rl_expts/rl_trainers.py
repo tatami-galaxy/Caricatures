@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
-from trl import AutoModelForCausalLMWithValueHead
+from torch.nn import CrossEntropyLoss
 
 
 @dataclass
@@ -116,6 +116,7 @@ class PPOTrainer(RLTrainer):
             target=self.config.target,
             horizon=self.config.horizon,
         )
+        self.ce_loss_fct = CrossEntropyLoss(ignore_index=self.config.ignore_index)
 
 
     def pad_and_stack(self, tensor_list, side='right'):
@@ -410,6 +411,7 @@ class PPOTrainer(RLTrainer):
         output_ids = mini_batch['output_ids']
         attention_mask = mini_batch['attention_mask']
         gen_label_ids = mini_batch['gen_label_ids']
+        # context_ids padded with self.config.ignore_index
         context_label_ids = mini_batch['context_label_ids']
         old_logprobs = mini_batch['logprobs']
         values = mini_batch['values']
@@ -469,9 +471,14 @@ class PPOTrainer(RLTrainer):
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
 
         # cross entropy loss for context
-        print(pg_loss[0])
-        print('')
-        print(context_label_ids)
+        # shift so that tokens < n predict n
+        shift_logits = logits[..., :-1, :].contiguous()
+        shift_context_labels = context_label_ids[..., 1:].contiguous()
+        context_loss = self.ce_loss_fct(
+            shift_logits.view(-1, shift_logits.size(-1)), shift_context_labels.view(-1)
+        )
+        print(context_loss[0])
+        print(context_loss.shape)
         quit()
 
 
