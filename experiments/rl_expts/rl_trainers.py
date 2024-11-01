@@ -393,8 +393,10 @@ class PPOTrainer(RLTrainer):
                 # advantage estimate for each timestep (revresed)
                 lastgaelam = delta[:, t] + self.config.gamma * self.config.lam * lastgaelam
                 advantages_reversed.append(lastgaelam)
-
             advantages = torch.stack(advantages_reversed[::-1]).transpose(0, 1)
+
+            # mask out context and padding positions
+            advantages = torch.mul(advantages, mask)
 
             print(advantages[0])
             print('')
@@ -402,8 +404,6 @@ class PPOTrainer(RLTrainer):
             print(advantages.shape)
             print(mask.shape)
             quit()
-            
-            # mask out context and padding positions
 
     
 
