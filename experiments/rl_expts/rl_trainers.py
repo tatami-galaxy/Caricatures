@@ -380,14 +380,13 @@ class PPOTrainer(RLTrainer):
             nextvalues[:, -1] = 0
             delta = rewards + self.config.gamma * nextvalues - values
             
-            for t in reversed(range(gen_len)):
-                if t < num_ce_tokens:
-                    # Handle CE from Mixer
-                    advantages_reversed.append(torch.zeros(values.shape[0], dtype=torch.float, device=values.device))
-                else:
-                    lastgaelam = delta[:, t] + self.config.gamma * self.config.lam * lastgaelam
-                    advantages_reversed.append(lastgaelam)
+            for t in reversed(range(delta.shape[1])):
+                # advantage estimate for each timestep (revresed)
+                lastgaelam = delta[:, t] + self.config.gamma * self.config.lam * lastgaelam
+                advantages_reversed.append(lastgaelam)
             advantages = torch.stack(advantages_reversed[::-1]).transpose(0, 1)
+            print(advantages.shape)
+            quit()
     
 
     def train_minibatch(self, forward_dict, rewards):
