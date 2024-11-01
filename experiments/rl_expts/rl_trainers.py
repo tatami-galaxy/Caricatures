@@ -442,10 +442,6 @@ class PPOTrainer(RLTrainer):
         logits = self.gather_from_acc(logits).to(device)
         vpred = self.gather_from_acc(vpred).to(device)
 
-        print(logits.shape)
-        print(vpred.shape)
-        quit()
-
         # logprobs
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
 
@@ -486,6 +482,10 @@ class PPOTrainer(RLTrainer):
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
 
+        print(vf_loss)
+        print(pg_loss[0])
+        quit()
+
         # cross entropy loss for context
 
 
@@ -518,4 +518,5 @@ class PPOTrainer(RLTrainer):
                 mini_batch = {
                     k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in forward_dict.items()
                 }
-                self.train_minibatch(mini_batch, rewards, low_mem)
+                mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
+                self.train_minibatch(mini_batch, mini_batch_rewards, low_mem)
