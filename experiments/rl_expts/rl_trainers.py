@@ -581,14 +581,17 @@ class PPOTrainer(RLTrainer):
         
         ## run minibatches and update policy ##
         ppo_bar = tqdm(range(self.config.ppo_epochs), disable=not self.accelerator.is_main_process, position=1)
+        stats = []
         for _ in range(self.config.ppo_epochs):
             for m in range(num_m_batches):
                 mini_batch = {
                     k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in forward_dict.items()
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
-                loss, stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
-                # TODO: process stats
+                loss, train_stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                print(train_stats)
+                quit()
+                stats.append(train_stats)
 
                 # backprop
                 self.accelerator.backward(loss)
@@ -602,5 +605,5 @@ class PPOTrainer(RLTrainer):
             ppo_bar.update(1)
         
         ## housekeeping ##
-        # TODO: what is this?
+        # TODO: process and update stats
         self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
