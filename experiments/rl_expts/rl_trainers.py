@@ -545,7 +545,7 @@ class PPOTrainer(RLTrainer):
         value_var = self.padded_var(values, score_mask).detach()
 
         stats = dict(
-            loss=dict(policy=pg_loss, value=vf_loss, ce_loss=ce_loss, total=loss),
+            loss=dict(policy=pg_loss.detach(), value=vf_loss.detach(), ce_loss=ce_loss.detach(), total=loss.detach()),
             policy=dict(
                 entropy=entropy, approxkl=approxkl, policykl=policykl, clipfrac=pg_clipfrac,
                 advantages=advantages.detach(),
@@ -554,7 +554,7 @@ class PPOTrainer(RLTrainer):
             returns=dict(mean=return_mean, var=return_var),
             val=dict(
                 vpred=self.padded_mean(vpred, score_mask).detach(),
-                error=self.padded_mean((vpred - returns) ** 2, score_mask),
+                error=self.padded_mean((vpred - returns) ** 2, score_mask).detach(),
                 clipfrac=vf_clipfrac, mean=value_mean, var=value_var
             ),
         )
