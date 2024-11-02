@@ -98,6 +98,15 @@ class RLTrainer:
         return flat
     
 
+    def stack_dict_batches(self, stats_dicts):
+        # stack the values of a dict."""
+        results = dict()
+        for k in stats_dicts[0]:
+            stats_list = [torch.flatten(d[k]) for d in stats_dicts]
+            results[k] = torch.stack(stats_list)
+        return results
+
+
     def pad_and_stack(self, tensor_list, side='right'):
         # get list of all tensors
         all_tensors = [t[i] for t in tensor_list for i in range(t.shape[0])]
@@ -594,8 +603,6 @@ class PPOTrainer(RLTrainer):
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 loss, train_stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
                 stats.append(train_stats)
-                print(stats)
-                quit()
 
                 # backprop
                 self.accelerator.backward(loss)
@@ -609,5 +616,8 @@ class PPOTrainer(RLTrainer):
             ppo_bar.update(1)
         
         ## housekeeping ##
+        stats = self.stack_dict_batches(stats)
+        print(stats)
+        quit()
         # TODO: process and update stats
         self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
