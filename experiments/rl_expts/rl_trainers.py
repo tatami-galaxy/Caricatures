@@ -60,8 +60,8 @@ class RLTrainer:
     ):
         self.config = config
         self.model = model
-        self.optimizer = optimizer,
-        self.lr_scheduler = lr_scheduler,
+        self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
         self.tokenizer = tokenizer
         self.accelerator = accelerator
 
