@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
+from tqdm.auto import tqdm
 
 import numpy as np
 
@@ -28,6 +29,7 @@ class PPOConfig:
     cliprange_value: float = 0.2
     cliprange: float = 0.2
     vf_coef: float = 0.1
+    max_grad_norm: float = 1.0
 
 
 class AdaptiveKLController:
@@ -414,7 +416,7 @@ class PPOTrainer(RLTrainer):
 
 
 
-    def train_minibatch(self, mini_batch, rewards, low_mem=False):
+    def run_minibatch(self, mini_batch, rewards, low_mem=False):
 
         device = 'cpu' if low_mem else self.accelerator.device
 
@@ -493,11 +495,9 @@ class PPOTrainer(RLTrainer):
 
         loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
 
-        # backprop
-        self.accelerator.backward(loss)
-        self.optimizer.step()
-        self.lr_scheduler.step()
-        self.optimizer.zero_grad()
+        # TODO: return stats
+
+        return loss
 
 
 
@@ -523,15 +523,26 @@ class PPOTrainer(RLTrainer):
         rewards = self.compute_rewards(forward_dict)
         
         ## run minibatches and update policy ##
+        ppo_bar = tqdm(range(self.config.ppo_epochs), disable=not self.accelerator.is_main_process, position=1)
         for _ in range(self.config.ppo_epochs):
             for m in range(num_m_batches):
                 mini_batch = {
                     k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in forward_dict.items()
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
-                self.train_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                loss = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                minibatch_loss = loss.detach().float()
+
+                # backprop
+                self.accelerator.backward(loss)
                 if self.accelerator.sync_gradients:
-                    progress_bar.update(1)
+                    self.accelerator.clip_grad_norm_(
+                        self.model.parameters(), self.config.max_grad_norm)
+                self.optimizer.step()
+                self.lr_scheduler.step()
+                self.optimizer.zero_grad()
+            
+            ppo_bar.update(1)
         
         ## housekeeping ##
         # TODO: what is this?
