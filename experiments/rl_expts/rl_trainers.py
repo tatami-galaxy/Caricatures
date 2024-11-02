@@ -326,6 +326,11 @@ class PPOTrainer(RLTrainer):
         logpy = torch.gather(logp, 2, labels.unsqueeze(2)).squeeze(-1)
         return logpy
     
+    def entropy_from_logits(self, logits):
+        pd = torch.nn.functional.softmax(logits, dim=-1)
+        entropy = torch.logsumexp(logits, axis=-1) - torch.sum(pd*logits, axis=-1)
+        return entropy
+
 
     def zero_out_logits(self, logits, context_ids, attention_mask):
         # zero out context positions in logits
@@ -500,12 +505,12 @@ class PPOTrainer(RLTrainer):
 
         # get stats
         with torch.no_grad():
+            # mean excluding padding
             pg_clipfrac = torch.sum(torch.gt(pg_losses2, pg_losses).double())/torch.sum(score_mask)
-            print(pg_clipfrac)
-            pg_clipfrac = torch.mean(torch.gt(pg_losses2, pg_losses).double())
-            print(pg_clipfrac)
+            entropy = torch.mean(self.entropy_from_logits(logits))
+            print(entropy.shape)
+            print(entropy[0])
             quit()
-            entropy = torch.mean(entropy_from_logits(logits))
             approxkl = .5 * torch.mean((logprobs - old_logprobs)**2)
             policykl = torch.mean(logprobs - old_logprobs)
             return_mean, return_var = torch.mean(returns), torch.var(returns)
