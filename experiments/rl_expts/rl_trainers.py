@@ -533,22 +533,16 @@ class PPOTrainer(RLTrainer):
         # total loss
         loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
 
-        print(loss)
-        print(loss.detach())
-        print(loss)
-        quit()
-
         # get stats
-        with torch.no_grad():
-            pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask)
-            entropy = self.padded_mean(self.entropy_from_logits(logits), score_mask)
-            approxkl = .5 * self.padded_mean((logprobs - old_logprobs)**2, score_mask)
-            policykl = self.padded_mean(logprobs - old_logprobs, score_mask)
+        pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask).detach()
+        entropy = self.padded_mean(self.entropy_from_logits(logits), score_mask).detach()
+        approxkl = .5 * self.padded_mean((logprobs - old_logprobs)**2, score_mask).detach()
+        policykl = self.padded_mean(logprobs - old_logprobs, score_mask).detach()
 
-            return_mean, return_var = self.padded_mean(
-                returns, score_mask), self.padded_var(returns, score_mask)
-            value_mean, value_var = self.padded_mean(
-                values, score_mask), self.padded_var(values, score_mask)
+        return_mean = self.padded_mean(returns, score_mask).detach()
+        return_var  = self.padded_var(returns, score_mask).detach()
+        value_mean = self.padded_mean(values, score_mask).detach()
+        value_var = self.padded_var(values, score_mask).detach()
 
         stats = dict(
             loss=dict(policy=pg_loss, value=vf_loss, ce_loss=ce_loss, total=loss),
@@ -598,6 +592,8 @@ class PPOTrainer(RLTrainer):
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 loss, train_stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
                 stats.append(train_stats)
+                print(stats)
+                quit()
 
                 # backprop
                 self.accelerator.backward(loss)
