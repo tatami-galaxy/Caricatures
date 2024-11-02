@@ -7,6 +7,7 @@ import copy
 from accelerate import Accelerator
 from accelerate.utils import set_seed
 
+import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
@@ -14,6 +15,7 @@ from transformers import (
     AutoTokenizer, default_data_collator,
     AutoModelForCausalLM,
     AutoConfig, GenerationConfig,
+    get_scheduler,
 )
 
 from datasets import load_dataset
@@ -162,10 +164,32 @@ def train(args, accelerator):
         drop_last=True,
     )
 
+    # prepare optimizer and schedule (linear warmup and decay)
+    no_decay = ["bias", "LayerNorm.weight"]
+    optimizer_grouped_parameters = [
+        {
+            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "weight_decay": args.weight_decay,
+        },
+        {
+            "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+            "weight_decay": 0.0,
+        },
+    ]
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
+
+    # scheduler
+    lr_scheduler = get_scheduler(
+        name=args.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=args.warmup_steps * accelerator.num_processes,
+        num_training_steps=args.train_steps * accelerator.num_processes,
+    )
+
 
     # prepare
-    model, ref_model, train_dataloader, eval_dataloader = accelerator.prepare(
-        model, ref_model, train_dataloader, eval_dataloader
+    model, optimizer, ref_model, train_dataloader, eval_dataloader, lr_scheduler = accelerator.prepare(
+        model, optimizer, ref_model, train_dataloader, eval_dataloader, lr_scheduler
     )
 
     # ppo trainer
@@ -180,13 +204,15 @@ def train(args, accelerator):
         config=ppo_config,
         model=model,
         ref_model=ref_model,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
         tokenizer=tokenizer,
         accelerator=accelerator,
     )
 
     # train
     global_step = 0  # tracks total steps
-    #progress_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
+    #global_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
     # eval bar
     #eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 

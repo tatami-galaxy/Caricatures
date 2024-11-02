@@ -50,11 +50,15 @@ class RLTrainer:
             self,
             config,
             model,
+            optimizer,
+            lr_scheduler,
             tokenizer,
             accelerator,
     ):
         self.config = config
         self.model = model
+        self.optimizer = optimizer,
+        self.lr_scheduler = lr_scheduler,
         self.tokenizer = tokenizer
         self.accelerator = accelerator
 
@@ -80,12 +84,16 @@ class ReinforceTrainer(RLTrainer):
             self,
             config,
             model,
+            optimizer,
+            lr_scheduler,
             tokenizer,
             accelerator,
         ):
         super().__init__(
             config,
             model,
+            optimizer,
+            lr_scheduler,
             tokenizer,
             accelerator,
         )
@@ -99,12 +107,16 @@ class PPOTrainer(RLTrainer):
             config,
             model,
             ref_model,
+            optimizer,
+            lr_scheduler,
             tokenizer,
             accelerator,
         ):
         super().__init__(
             config,
             model,
+            optimizer,
+            lr_scheduler,
             tokenizer,
             accelerator,
         )
@@ -483,10 +495,9 @@ class PPOTrainer(RLTrainer):
 
         # backprop
         self.accelerator.backward(loss)
-        # TODO: initi optimizer, scheduler
-        optimizer.step()
-        lr_scheduler.step()
-        optimizer.zero_grad()
+        self.optimizer.step()
+        self.lr_scheduler.step()
+        self.optimizer.zero_grad()
 
 
 
@@ -519,6 +530,8 @@ class PPOTrainer(RLTrainer):
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 self.train_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                if self.accelerator.sync_gradients:
+                    progress_bar.update(1)
         
         ## housekeeping ##
         # TODO: what is this?
