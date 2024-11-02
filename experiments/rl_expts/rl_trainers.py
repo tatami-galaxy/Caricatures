@@ -89,7 +89,7 @@ class RLTrainer:
                 if sep in k:
                     raise ValueError(
                         f"separator '{sep}' not allowed to be in key '{k}'")
-                if isinstance(v, collections.Mapping):
+                if isinstance(v, collections.abc.Mapping):
                     rec(v, prefix + k + sep, into)
                 else:
                     into[prefix + k] = v
@@ -555,14 +555,7 @@ class PPOTrainer(RLTrainer):
                      clipfrac=vf_clipfrac, mean=value_mean, var=value_var),
         )
 
-        # TODO: flatten dict
-        print('dict')
-        print(stats)
-        print('flattened dict')
-        print(self.flatten_dict(stats))
-        quit()
-
-        return loss, stats
+        return loss, self.flatten_dict(stats)
 
 
     def step(self, batch, low_mem=False):
@@ -595,6 +588,7 @@ class PPOTrainer(RLTrainer):
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 loss, stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                # TODO: process stats
 
                 # backprop
                 self.accelerator.backward(loss)
