@@ -378,9 +378,13 @@ class PPOTrainer(RLTrainer):
         return rewards
     
 
+    def padded_mean(self, values, mask):
+        return torch.sum(values)/torch.sum(mask)
+
+
     def padded_var(self, values, mask):
-        padded_mean = torch.sum(values)/torch.sum(mask)
-        var_sub = values - padded_mean
+        p_mean = self.padded_mean(values, mask)
+        var_sub = values - p_mean
         var_sub_sq = torch.mul(torch.mul(var_sub, var_sub), mask)
         var_sum_sq = torch.sum(var_sub_sq)
         return var_sum_sq / (torch.sum(mask) - 1)
@@ -388,11 +392,11 @@ class PPOTrainer(RLTrainer):
 
     def whiten(self, values, mask, shift_mean=True):
         # whiten values
-        mean, var = torch.sum(values)/torch.sum(mask), self.padded_var(values, mask)
+        mean, var = self.padded_mean(values, mask), self.padded_var(values, mask)
         whitened = (values - mean) * torch.rsqrt(var + 1e-8)
         if not shift_mean:
             whitened += mean
-        return whitened
+        return torch.mul(whitened, mask)
     
 
     def clip_by_value(self, x, tensor_min, tensor_max):
@@ -423,6 +427,7 @@ class PPOTrainer(RLTrainer):
             advantages = torch.mul(advantages, mask)
             # whiten
             advantages = self.whiten(advantages, mask)
+
             print(advantages[0])
             print(advantages.shape)
             quit()
@@ -516,10 +521,10 @@ class PPOTrainer(RLTrainer):
 
         # get stats
         with torch.no_grad():
-            pg_clipfrac = torch.sum(torch.gt(pg_losses2, pg_losses).double())/torch.sum(score_mask)
-            entropy = torch.sum(self.entropy_from_logits(logits))/torch.sum(score_mask)
-            approxkl = .5 * (torch.sum((logprobs - old_logprobs)**2)/torch.sum(score_mask))
-            policykl = torch.sum(logprobs - old_logprobs)/torch.sum(score_mask)
+            pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double())
+            entropy = self.padded_mean(self.entropy_from_logits(logits))
+            approxkl = .5 * self.padded_mean((logprobs - old_logprobs)**2)
+            policykl = self.padded_mean(logprobs - old_logprobs)
 
             return_mean, return_var = torch.mean(returns), torch.var(returns)
             value_mean, value_var = torch.mean(values), torch.var(values)
