@@ -383,8 +383,6 @@ class PPOTrainer(RLTrainer):
         var_sub = values - padded_mean
         var_sub_sq = torch.mul(torch.mul(var_sub, var_sub), mask)
         var_sum_sq = torch.sum(var_sub_sq)
-        print(var_sum_sq)
-        quit()
         return var_sum_sq / (torch.sum(mask) - 1)
     
 
@@ -423,8 +421,11 @@ class PPOTrainer(RLTrainer):
 
             # mask out context and padding positions
             advantages = torch.mul(advantages, mask)
-            # TODO: whiten -> incorrect implementation. need to ignore padding
+            # whiten
             advantages = self.whiten(advantages, mask)
+            print(advantages[0])
+            print(advantages.shape)
+            quit()
 
             return advantages
 
