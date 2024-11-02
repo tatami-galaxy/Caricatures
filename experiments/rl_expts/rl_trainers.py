@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 from tqdm.auto import tqdm
+import collections
 
 import numpy as np
 
@@ -79,6 +80,93 @@ class RLTrainer:
         input_ids = tokenized_tokens['input_ids']
         attention_mask = tokenized_tokens['attention_mask']
         return input_ids, attention_mask
+    
+
+    def flatten_dict(self, nested, sep='/'):
+        # flatten dictionary and concatenate nested keys with separator
+        def rec(nest, prefix, into):
+            for k, v in nest.items():
+                if sep in k:
+                    raise ValueError(
+                        f"separator '{sep}' not allowed to be in key '{k}'")
+                if isinstance(v, collections.Mapping):
+                    rec(v, prefix + k + sep, into)
+                else:
+                    into[prefix + k] = v
+        flat = {}
+        rec(nested, '', flat)
+        return flat
+    
+
+    def pad_and_stack(self, tensor_list, side='right'):
+        # get list of all tensors
+        all_tensors = [t[i] for t in tensor_list for i in range(t.shape[0])]
+        # pad and stack
+        tensor_ids = pad_sequence(
+            all_tensors,
+            batch_first=True,
+            padding_value=self.tokenizer.pad_token_id,
+            padding_side=side,
+        )
+        return tensor_ids
+    
+
+    def gather_from_acc(self, tensors):
+        return self.accelerator.gather(
+            self.accelerator.pad_across_processes(
+                tensors, dim=1, pad_index=self.tokenizer.pad_token_id)
+        )
+    
+
+    def logprobs_from_logits(self, logits, labels):
+        # https://github.com/pytorch/pytorch/issues/563#issuecomment-330103591
+        logp = torch.log(F.softmax(logits, dim=2) + self.config.epsilon)
+        logpy = torch.gather(logp, 2, labels.unsqueeze(2)).squeeze(-1)
+        return logpy
+
+
+    def entropy_from_logits(self, logits):
+        pd = torch.nn.functional.softmax(logits, dim=-1)
+        entropy = torch.logsumexp(logits, axis=-1) - \
+            torch.sum(pd*logits, axis=-1)
+        return entropy
+
+
+    def zero_out_logits(self, logits, context_ids, attention_mask):
+        # zero out context positions in logits
+        logits[context_ids != self.config.ignore_index] = 0
+        # zero out padding positions in logits
+        logits[attention_mask == 0] = 0
+        return logits
+    
+
+    def padded_mean(self, values, mask):
+        return torch.sum(values)/torch.sum(mask)
+
+
+    def padded_var(self, values, mask):
+        p_mean = self.padded_mean(values, mask)
+        var_sub = values - p_mean
+        var_sub_sq = torch.mul(torch.mul(var_sub, var_sub), mask)
+        var_sum_sq = torch.sum(var_sub_sq)
+        return var_sum_sq / (torch.sum(mask) - 1)
+
+
+    def whiten(self, values, mask, shift_mean=True):
+        # whiten values
+        mean, var = self.padded_mean(
+            values, mask), self.padded_var(values, mask)
+        whitened = (values - mean) * torch.rsqrt(var + 1e-8)
+        if not shift_mean:
+            whitened += mean
+        return torch.mul(whitened, mask)
+
+
+    def clip_by_value(self, x, tensor_min, tensor_max):
+        # tensor extenstion to torch.clamp
+        # https://github.com/pytorch/pytorch/issues/2793#issuecomment-428784713
+        clipped = torch.max(torch.min(x, tensor_max), tensor_min)
+        return clipped
 
 
 class ReinforceTrainer(RLTrainer):
@@ -99,7 +187,6 @@ class ReinforceTrainer(RLTrainer):
             tokenizer,
             accelerator,
         )
-
 
 
 class PPOTrainer(RLTrainer):
@@ -129,19 +216,6 @@ class PPOTrainer(RLTrainer):
             horizon=self.config.horizon,
         )
         self.ce_loss_fct = CrossEntropyLoss(ignore_index=self.config.ignore_index)
-
-
-    def pad_and_stack(self, tensor_list, side='right'):
-        # get list of all tensors
-        all_tensors = [t[i] for t in tensor_list for i in range(t.shape[0])]
-        # pad and stack
-        tensor_ids = pad_sequence(
-            all_tensors,
-            batch_first=True,
-            padding_value=self.tokenizer.pad_token_id,
-            padding_side=side,
-        )
-        return tensor_ids
 
 
     # sample batch -> input_ids, attention_mask, labels
@@ -215,13 +289,6 @@ class PPOTrainer(RLTrainer):
         rl_inputs['gen_label_ids'] = gen_label_ids
 
         return rl_inputs
-    
-
-    def gather_from_acc(self, tensors):
-        return self.accelerator.gather(
-            self.accelerator.pad_across_processes(
-                tensors, dim=1, pad_index=self.tokenizer.pad_token_id)
-            )
 
 
     # forward with generated samples to get logtis, values
@@ -318,26 +385,6 @@ class PPOTrainer(RLTrainer):
         }
 
         return forward_dict
-    
-
-    def logprobs_from_logits(self, logits, labels):
-        # https://github.com/pytorch/pytorch/issues/563#issuecomment-330103591
-        logp = torch.log(F.softmax(logits, dim=2) + self.config.epsilon)
-        logpy = torch.gather(logp, 2, labels.unsqueeze(2)).squeeze(-1)
-        return logpy
-    
-    def entropy_from_logits(self, logits):
-        pd = torch.nn.functional.softmax(logits, dim=-1)
-        entropy = torch.logsumexp(logits, axis=-1) - torch.sum(pd*logits, axis=-1)
-        return entropy
-
-
-    def zero_out_logits(self, logits, context_ids, attention_mask):
-        # zero out context positions in logits
-        logits[context_ids != self.config.ignore_index] = 0
-        # zero out padding positions in logits
-        logits[attention_mask == 0] = 0
-        return logits
 
 
     def score_function(self, output_ids, gen_label_ids, context_label_ids, metric='acc'):
@@ -376,34 +423,6 @@ class PPOTrainer(RLTrainer):
             rewards = score
             
         return rewards
-    
-
-    def padded_mean(self, values, mask):
-        return torch.sum(values)/torch.sum(mask)
-
-
-    def padded_var(self, values, mask):
-        p_mean = self.padded_mean(values, mask)
-        var_sub = values - p_mean
-        var_sub_sq = torch.mul(torch.mul(var_sub, var_sub), mask)
-        var_sum_sq = torch.sum(var_sub_sq)
-        return var_sum_sq / (torch.sum(mask) - 1)
-    
-
-    def whiten(self, values, mask, shift_mean=True):
-        # whiten values
-        mean, var = self.padded_mean(values, mask), self.padded_var(values, mask)
-        whitened = (values - mean) * torch.rsqrt(var + 1e-8)
-        if not shift_mean:
-            whitened += mean
-        return torch.mul(whitened, mask)
-    
-
-    def clip_by_value(self, x, tensor_min, tensor_max):
-        # tensor extenstion to torch.clamp 
-        # https://github.com/pytorch/pytorch/issues/2793#issuecomment-428784713
-        clipped = torch.max(torch.min(x, tensor_max), tensor_min)
-        return clipped
 
 
     def compute_advantages(self, values, rewards, mask):
@@ -428,12 +447,7 @@ class PPOTrainer(RLTrainer):
             # whiten
             advantages = self.whiten(advantages, mask)
 
-            print(advantages[0])
-            print(advantages.shape)
-            quit()
-
             return advantages
-
 
 
     def run_minibatch(self, mini_batch, rewards, low_mem=False):
@@ -521,26 +535,34 @@ class PPOTrainer(RLTrainer):
 
         # get stats
         with torch.no_grad():
-            pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double())
-            entropy = self.padded_mean(self.entropy_from_logits(logits))
-            approxkl = .5 * self.padded_mean((logprobs - old_logprobs)**2)
-            policykl = self.padded_mean(logprobs - old_logprobs)
+            pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask)
+            entropy = self.padded_mean(self.entropy_from_logits(logits), score_mask)
+            approxkl = .5 * self.padded_mean((logprobs - old_logprobs)**2, score_mask)
+            policykl = self.padded_mean(logprobs - old_logprobs, score_mask)
 
-            return_mean, return_var = torch.mean(returns), torch.var(returns)
-            value_mean, value_var = torch.mean(values), torch.var(values)
+            return_mean, return_var = self.padded_mean(
+                returns, score_mask), self.padded_var(returns, score_mask)
+            value_mean, value_var = self.padded_mean(
+                values, score_mask), self.padded_var(values, score_mask)
 
         stats = dict(
             loss=dict(policy=pg_loss, value=vf_loss, ce_loss=ce_loss, total=loss),
             policy=dict(entropy=entropy, approxkl=approxkl,policykl=policykl, clipfrac=pg_clipfrac,
-                        advantages=advantages, advantages_mean=torch.mean(advantages), ratio=ratio
+                        advantages=advantages, advantages_mean=self.padded_mean(advantages, score_mask), ratio=ratio
             ),
             returns=dict(mean=return_mean, var=return_var),
             val=dict(vpred=torch.mean(vpred), error=torch.mean((vpred - returns) ** 2),
                      clipfrac=vf_clipfrac, mean=value_mean, var=value_var),
         )
 
-        return loss, stats
+        # TODO: flatten dict
+        print('dict')
+        print(stats)
+        print('flattened dict')
+        print(self.flatten_dict(stats))
+        quit()
 
+        return loss, stats
 
 
     def step(self, batch, low_mem=False):
@@ -572,7 +594,7 @@ class PPOTrainer(RLTrainer):
                     k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in forward_dict.items()
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
-                loss = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                loss, stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
 
                 # backprop
                 self.accelerator.backward(loss)
