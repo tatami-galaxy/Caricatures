@@ -373,7 +373,6 @@ class PPOTrainer(RLTrainer):
         return rewards
     
 
-    # TODO: exclude padding
     def whiten(self, values, mask, shift_mean=True):
         # whiten values
         mean, var = torch.mean(values), torch.var(values)
@@ -429,7 +428,7 @@ class PPOTrainer(RLTrainer):
         values = mini_batch['values']
         score_mask = mini_batch['score_mask']
 
-        # compute advantages (already masked out)
+        # compute advantages from values and rewards
         advantages = self.compute_advantages(values, rewards, score_mask)
 
         # model forward
@@ -449,13 +448,16 @@ class PPOTrainer(RLTrainer):
         logprobs = self.zero_out_logits(logprobs, context_label_ids, attention_mask)
         vpred = self.zero_out_logits(vpred, context_label_ids, attention_mask)
 
-        # calculate value function loss
+        # value function fitting 
+        # calculate value function loss with clipping
         vpred_clipped = self.clip_by_value(
             vpred,
             values - self.config.cliprange_value,
             values + self.config.cliprange_value
         )
-        # TODO: what is return?
+        # y values for value function fitting
+        # instead of using the single sample return,
+        # use bootstrapped estimate of the value
         returns = advantages + values
         # equation 9 ppo paper : https://arxiv.org/pdf/1707.06347
         vf_losses1 = (vpred - returns)**2
@@ -495,9 +497,29 @@ class PPOTrainer(RLTrainer):
 
         loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
 
-        # TODO: return stats
+        print(pg_losses2)
+        quit()
 
-        return loss
+        # get stats
+        with torch.no_grad():
+            pg_clipfrac = torch.mean(torch.gt(pg_losses2, pg_losses).double())
+            entropy = torch.mean(entropy_from_logits(logits))
+            approxkl = .5 * torch.mean((logprobs - old_logprobs)**2)
+            policykl = torch.mean(logprobs - old_logprobs)
+            return_mean, return_var = torch.mean(returns), torch.var(returns)
+            value_mean, value_var = torch.mean(values), torch.var(values)
+
+        stats = dict(
+            loss=dict(policy=pg_loss, value=vf_loss, ce_loss=ce_loss, total=loss),
+            policy=dict(entropy=entropy, approxkl=approxkl,policykl=policykl, clipfrac=pg_clipfrac,
+                        advantages=advantages, advantages_mean=torch.mean(advantages), ratio=ratio
+            ),
+            returns=dict(mean=return_mean, var=return_var),
+            val=dict(vpred=torch.mean(vpred), error=torch.mean((vpred - returns) ** 2),
+                     clipfrac=vf_clipfrac, mean=value_mean, var=value_var),
+        )
+
+        return loss, stats
 
 
 
@@ -531,7 +553,6 @@ class PPOTrainer(RLTrainer):
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 loss = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
-                minibatch_loss = loss.detach().float()
 
                 # backprop
                 self.accelerator.backward(loss)
