@@ -378,9 +378,16 @@ class PPOTrainer(RLTrainer):
         return rewards
     
 
+    def padded_var(self, values, mask):
+        padded_mean = torch.sum(values)/torch.sum(mask)
+        var_sum = values - padded_mean
+        print(var_sum[0])
+        quit()
+    
+
     def whiten(self, values, mask, shift_mean=True):
         # whiten values
-        mean, var = torch.mean(values), torch.var(values)
+        mean, var = torch.sum(values)/torch.sum(mask), self.padded_var(values)
         whitened = (values - mean) * torch.rsqrt(var + 1e-8)
         if not shift_mean:
             whitened += mean
@@ -414,7 +421,7 @@ class PPOTrainer(RLTrainer):
             # mask out context and padding positions
             advantages = torch.mul(advantages, mask)
             # TODO: whiten -> incorrect implementation. need to ignore padding
-            #advantages = self.whiten(advantages, mask)
+            advantages = self.whiten(advantages, mask)
 
             return advantages
 
@@ -505,14 +512,11 @@ class PPOTrainer(RLTrainer):
 
         # get stats
         with torch.no_grad():
-            # mean excluding padding
             pg_clipfrac = torch.sum(torch.gt(pg_losses2, pg_losses).double())/torch.sum(score_mask)
-            entropy = torch.mean(self.entropy_from_logits(logits))
-            print(entropy.shape)
-            print(entropy[0])
-            quit()
-            approxkl = .5 * torch.mean((logprobs - old_logprobs)**2)
-            policykl = torch.mean(logprobs - old_logprobs)
+            entropy = torch.sum(self.entropy_from_logits(logits))/torch.sum(score_mask)
+            approxkl = .5 * (torch.sum((logprobs - old_logprobs)**2)/torch.sum(score_mask))
+            policykl = torch.sum(logprobs - old_logprobs)/torch.sum(score_mask)
+
             return_mean, return_var = torch.mean(returns), torch.var(returns)
             value_mean, value_var = torch.mean(values), torch.var(values)
 
