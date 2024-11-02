@@ -380,10 +380,12 @@ class PPOTrainer(RLTrainer):
 
     def padded_var(self, values, mask):
         padded_mean = torch.sum(values)/torch.sum(mask)
-        var_sum = values - padded_mean
-        var_sum_sq = torch.mul(torch.mul(var_sum, var_sum), mask)
-        print(var_sum_sq[0])
+        var_sub = values - padded_mean
+        var_sub_sq = torch.mul(torch.mul(var_sub, var_sub), mask)
+        var_sum_sq = torch.sum(var_sub_sq)
+        print(var_sum_sq)
         quit()
+        return var_sum_sq / (torch.sum(mask) - 1)
     
 
     def whiten(self, values, mask, shift_mean=True):
