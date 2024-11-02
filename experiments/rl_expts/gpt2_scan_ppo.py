@@ -307,9 +307,15 @@ def run():
         type=int,
     )
     parser.add_argument(
+        "--warmup_steps",
+        default=0,
+        type=int,
+    )
+    parser.add_argument(
         "--lr",
-        default=5e-5, 
-        type=float
+        default=1.41e-5,
+        type=float,
+        help="ppo learning rate"
     )
     parser.add_argument(
         "--weight_decay",

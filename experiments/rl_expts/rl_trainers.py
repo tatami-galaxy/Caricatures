@@ -495,14 +495,16 @@ class PPOTrainer(RLTrainer):
             shift_logits.view(-1, shift_logits.size(-1)), shift_context_labels.view(-1)
         )
 
+        # total loss
         loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
-
-        print(pg_losses2)
-        quit()
 
         # get stats
         with torch.no_grad():
+            pg_clipfrac = torch.sum(torch.gt(pg_losses2, pg_losses).double())/torch.sum(score_mask)
+            print(pg_clipfrac)
             pg_clipfrac = torch.mean(torch.gt(pg_losses2, pg_losses).double())
+            print(pg_clipfrac)
+            quit()
             entropy = torch.mean(entropy_from_logits(logits))
             approxkl = .5 * torch.mean((logprobs - old_logprobs)**2)
             policykl = torch.mean(logprobs - old_logprobs)
