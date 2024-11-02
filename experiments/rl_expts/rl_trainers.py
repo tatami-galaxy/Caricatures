@@ -499,10 +499,10 @@ class PPOTrainer(RLTrainer):
         vf_losses2 = (vpred_clipped - returns)**2
         # clamped loss following DQL
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
-        vf_loss = .5 * torch.mean(
-            torch.clamp(torch.max(vf_losses1, vf_losses2), min=-1, max=1)
+        vf_loss = .5 * self.padded_mean(
+            torch.clamp(torch.max(vf_losses1, vf_losses2), min=-1, max=1), score_mask
         )
-        vf_clipfrac =  torch.mean(torch.gt(vf_losses2, vf_losses1).double())
+        vf_clipfrac =  self.padded_mean(torch.gt(vf_losses2, vf_losses1).double(), score_mask)
 
         # calculate policy gradient loss
         # importance sampling ratio
@@ -547,12 +547,14 @@ class PPOTrainer(RLTrainer):
         stats = dict(
             loss=dict(policy=pg_loss, value=vf_loss, ce_loss=ce_loss, total=loss),
             policy=dict(
-                entropy=entropy, approxkl=approxkl,policykl=policykl, clipfrac=pg_clipfrac,
-                advantages=advantages, advantages_mean=self.padded_mean(advantages, score_mask), ratio=ratio
+                entropy=entropy, approxkl=approxkl, policykl=policykl, clipfrac=pg_clipfrac,
+                advantages=advantages.detach(),
+                advantages_mean=self.padded_mean(advantages.detach(), score_mask), ratio=ratio.detach()
             ),
             returns=dict(mean=return_mean, var=return_var),
             val=dict(
-                vpred=torch.mean(vpred), error=torch.mean((vpred - returns) ** 2),
+                vpred=self.padded_mean(vpred, score_mask).detach(),
+                error=self.padded_mean((vpred - returns) ** 2, score_mask),
                 clipfrac=vf_clipfrac, mean=value_mean, var=value_var
             ),
         )
