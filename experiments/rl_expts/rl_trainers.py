@@ -577,9 +577,10 @@ class PPOTrainer(RLTrainer):
     def process_stats(self, stats):
 
         stats = self.stack_dict_batches(stats)
-        print(stats.keys())
+        print(stats['policy/kl'])
+        mean_kl = torch.mean(stats['policy/kl'])
+        print(mean_kl)
         quit()
-        mean_kl = torch.mean(stats['kl'])
         mean_entropy = torch.mean(torch.sum(-data['logprobs'], axis=1))
         mean_non_score_reward =torch.mean(torch.sum(data['non_score_reward'], axis=1))
         stats = {
@@ -650,4 +651,4 @@ class PPOTrainer(RLTrainer):
             ppo_bar.update(1)
         
         ## housekeeping ##
-        stats = self.process_stats(forward_dict, stats)
+        stats = self.process_stats(stats)
