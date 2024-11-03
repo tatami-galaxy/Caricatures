@@ -569,6 +569,14 @@ class PPOTrainer(RLTrainer):
         )
 
         return loss, self.flatten_dict(stats)
+    
+
+    def process_stats(self, forward_dict, stats):
+        stats = self.stack_dict_batches(stats)
+        print(stats['policy/entropy'])
+        quit()
+
+        #self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
 
 
     def step(self, batch, low_mem=False):
@@ -616,8 +624,4 @@ class PPOTrainer(RLTrainer):
             ppo_bar.update(1)
         
         ## housekeeping ##
-        stats = self.stack_dict_batches(stats)
-        print(stats['objective/kl'].shape)
-        quit()
-
-        self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
+        stats = self.process_stats(forward_dict, stats)
