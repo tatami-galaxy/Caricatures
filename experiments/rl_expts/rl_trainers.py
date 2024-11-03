@@ -577,17 +577,14 @@ class PPOTrainer(RLTrainer):
     def process_stats(self, stats):
 
         stats = self.stack_dict_batches(stats)
-        print(stats['policy/kl'])
+
         mean_kl = torch.mean(stats['policy/kl'])
-        print(mean_kl)
-        quit()
-        mean_entropy = torch.mean(torch.sum(-data['logprobs'], axis=1))
-        mean_non_score_reward =torch.mean(torch.sum(data['non_score_reward'], axis=1))
+        mean_entropy = torch.mean(stats['policy/entropy'])
+        mean_reward = torch.mean(stats['policy/rewards'])
         stats = {
             'objective/kl': mean_kl,
-            'objective/kl_dist': kl,
-            'objective/logprobs': data['logprobs'],
-            'objective/ref_logprobs': data['ref_logprobs'],
+            'objective/kl_dist': stats['policy/kl'],
+            # TODO:
             'objective/kl_coef': kl_coef,
             'objective/entropy': mean_entropy,
             'ppo/mean_non_score_reward': mean_non_score_reward,
