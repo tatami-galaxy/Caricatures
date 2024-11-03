@@ -459,7 +459,7 @@ class PPOTrainer(RLTrainer):
             return advantages
 
 
-    def run_minibatch(self, mini_batch, rewards, low_mem=False):
+    def run_minibatch(self, mini_batch, mini_batch_rewards, low_mem=False):
 
         device = 'cpu' if low_mem else self.accelerator.device
 
@@ -473,7 +473,7 @@ class PPOTrainer(RLTrainer):
         score_mask = mini_batch['score_mask']
 
         # compute advantages from values and rewards
-        advantages = self.compute_advantages(values, rewards, score_mask)
+        advantages = self.compute_advantages(values, mini_batch_rewards, score_mask)
 
         # model forward
         # output = (lm_logits, loss=None, value)
@@ -542,6 +542,10 @@ class PPOTrainer(RLTrainer):
         # total loss
         loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
 
+        print(mini_batch_rewards[0])
+        print(mini_batch_rewards.shape)
+        quit()
+
         # get stats
         pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask).detach()
         entropy = self.padded_mean(self.entropy_from_logits(logits), score_mask).detach()
@@ -573,8 +577,6 @@ class PPOTrainer(RLTrainer):
 
     def process_stats(self, forward_dict, stats):
         stats = self.stack_dict_batches(stats)
-        print(stats['policy/entropy'])
-        quit()
 
         #self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
 
