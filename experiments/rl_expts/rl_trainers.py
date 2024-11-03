@@ -542,10 +542,6 @@ class PPOTrainer(RLTrainer):
         # total loss
         loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
 
-        print(mini_batch_rewards[0])
-        print(mini_batch_rewards.shape)
-        quit()
-
         # get stats
         pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask).detach()
         entropy = self.padded_mean(self.entropy_from_logits(logits), score_mask).detach()
@@ -561,8 +557,8 @@ class PPOTrainer(RLTrainer):
             loss=dict(policy=pg_loss.detach(), value=vf_loss.detach(), ce_loss=ce_loss.detach(), total=loss.detach()),
             policy=dict(
                 entropy=entropy, approxkl=approxkl, policykl=policykl, clipfrac=pg_clipfrac,
-                advantages=advantages.detach(),
-                advantages_mean=self.padded_mean(advantages.detach(), score_mask), ratio=ratio.detach()
+                advantages=advantages.detach(), advantages_mean=self.padded_mean(advantages.detach(), score_mask),
+                ratio=ratio.detach(), rewards=self.padded_mean(mini_batch_rewards, score_mask)
             ),
             returns=dict(mean=return_mean, var=return_var),
             val=dict(
@@ -612,6 +608,8 @@ class PPOTrainer(RLTrainer):
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 loss, train_stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                print(train_stats)
+                quit()
                 stats.append(train_stats)
 
                 # backprop
