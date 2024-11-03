@@ -469,6 +469,7 @@ class PPOTrainer(RLTrainer):
         # context_ids padded with self.config.ignore_index
         context_label_ids = mini_batch['context_label_ids']
         old_logprobs = mini_batch['logprobs']
+        ref_logprobs = mini_batch['ref_logprobs']
         values = mini_batch['values']
         score_mask = mini_batch['score_mask']
 
@@ -545,6 +546,7 @@ class PPOTrainer(RLTrainer):
         # get stats
         pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask).detach()
         entropy = self.padded_mean(self.entropy_from_logits(logits), score_mask).detach()
+        kl = self.padded_mean((old_logprobs-ref_logprobs), score_mask)
         approxkl = .5 * self.padded_mean((logprobs - old_logprobs)**2, score_mask).detach()
         policykl = self.padded_mean(logprobs - old_logprobs, score_mask).detach()
 
@@ -558,7 +560,8 @@ class PPOTrainer(RLTrainer):
             policy=dict(
                 entropy=entropy, approxkl=approxkl, policykl=policykl, clipfrac=pg_clipfrac,
                 advantages=advantages.detach(), advantages_mean=self.padded_mean(advantages.detach(), score_mask),
-                ratio=ratio.detach(), rewards=self.padded_mean(mini_batch_rewards, score_mask)
+                ratio=ratio.detach(), rewards=self.padded_mean(mini_batch_rewards, score_mask),
+                kl=kl.detach()
             ),
             returns=dict(mean=return_mean, var=return_var),
             val=dict(
@@ -571,15 +574,12 @@ class PPOTrainer(RLTrainer):
         return loss, self.flatten_dict(stats)
     
 
-    def process_stats(self, forward_dict, stats):
+    def process_stats(self, stats):
 
         stats = self.stack_dict_batches(stats)
-        kl = forward_dict['logprobs'] - forward_dict['ref_logprobs']
-        print(kl[0])
-        print(kl.shape)
+        print(stats.keys())
         quit()
-        
-        mean_kl = torch.mean(torch.sum(kl, axis=-1))
+        mean_kl = torch.mean(stats['kl'])
         mean_entropy = torch.mean(torch.sum(-data['logprobs'], axis=1))
         mean_non_score_reward =torch.mean(torch.sum(data['non_score_reward'], axis=1))
         stats = {
