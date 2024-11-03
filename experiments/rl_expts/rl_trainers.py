@@ -573,7 +573,8 @@ class PPOTrainer(RLTrainer):
 
     def process_stats(self, forward_dict, stats):
         stats = self.stack_dict_batches(stats)
-
+        print(stats)
+        quit()
         #self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
 
 
@@ -608,8 +609,6 @@ class PPOTrainer(RLTrainer):
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
                 loss, train_stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
-                print(train_stats)
-                quit()
                 stats.append(train_stats)
 
                 # backprop
