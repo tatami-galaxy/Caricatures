@@ -617,16 +617,7 @@ class PPOTrainer(RLTrainer):
         
         ## housekeeping ##
         stats = self.stack_dict_batches(stats)
-        print(stats['policy/advantages'])
-        # reshape advantages/ratios such that they are not averaged.
-        try:
-            stats['policy/advantages'] = torch.flatten(stats['policy/advantages']).unsqueeze(0)
-            stats['policy/ratio'] = torch.flatten(stats['policy/ratio']).unsqueeze(0)
-        except TypeError as e:
-            train_stats['policy/advantages'] = None
-            train_stats['policy/ratio'] = None
-            print('')
-        print(stats['policy/advantages'])
+        print(stats['objective/kl'].shape)
         quit()
 
         self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
