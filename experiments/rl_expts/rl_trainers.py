@@ -572,9 +572,36 @@ class PPOTrainer(RLTrainer):
     
 
     def process_stats(self, forward_dict, stats):
+
         stats = self.stack_dict_batches(stats)
-        print(stats)
+        kl = forward_dict['logprobs'] - forward_dict['ref_logprobs']
+        print(kl[0])
+        print(kl.shape)
         quit()
+        
+        mean_kl = torch.mean(torch.sum(kl, axis=-1))
+        mean_entropy = torch.mean(torch.sum(-data['logprobs'], axis=1))
+        mean_non_score_reward =torch.mean(torch.sum(data['non_score_reward'], axis=1))
+        stats = {
+            'objective/kl': mean_kl,
+            'objective/kl_dist': kl,
+            'objective/logprobs': data['logprobs'],
+            'objective/ref_logprobs': data['ref_logprobs'],
+            'objective/kl_coef': kl_coef,
+            'objective/entropy': mean_entropy,
+            'ppo/mean_non_score_reward': mean_non_score_reward,
+        }
+
+        for k, v in data['train_stats'].items():
+            try:
+                stats[f'ppo/{k}'] = torch.mean(v, axis=0)
+            except TypeError as e:
+                stats[f'ppo/{k}'] = None
+        try: 
+            stats['ppo/val/var_explained'] = 1 - stats['ppo/val/error'] / stats['ppo/returns/var']
+        except TypeError as e:
+            stats['ppo/val/var_explained'] = None
+        return stats
         #self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
 
 
