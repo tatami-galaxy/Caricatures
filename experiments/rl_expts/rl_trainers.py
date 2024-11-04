@@ -43,6 +43,7 @@ class AdaptiveKLController:
     def update(self, current, n_steps):
         target = self.target
         proportional_error = np.clip(current / target - 1, -0.2, 0.2)
+        # TODO: change update?
         mult = 1 + proportional_error * n_steps / self.horizon
         self.value *= mult
 
@@ -541,7 +542,7 @@ class PPOTrainer(RLTrainer):
         )
 
         # total loss
-        loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
+        loss =  pg_loss + self.config.vf_coef * vf_loss #+ ce_loss
 
         # get stats
         pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask).detach()
@@ -587,11 +588,12 @@ class PPOTrainer(RLTrainer):
             'objective/entropy': mean_entropy,
             'ppo/mean_reward': mean_reward,
         })
-
+        mean_stats = {}
         for k, v in stats.items():
-            pass
-    
-        #self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
+            if torch.is_tensor(v): mean_stats[k] = torch.mean(v)
+            else: mean_stats[k] = v
+
+        return mean_stats
 
 
     def step(self, batch, low_mem=False):
@@ -616,7 +618,7 @@ class PPOTrainer(RLTrainer):
         rewards = self.compute_rewards(forward_dict)
         
         ## run minibatches and update policy ##
-        ppo_bar = tqdm(range(self.config.ppo_epochs), disable=not self.accelerator.is_main_process, position=1)
+        #ppo_bar = tqdm(range(self.config.ppo_epochs), disable=not self.accelerator.is_main_process)
         stats = []
         for _ in range(self.config.ppo_epochs):
             for m in range(num_m_batches):
@@ -636,7 +638,11 @@ class PPOTrainer(RLTrainer):
                 self.lr_scheduler.step()
                 self.optimizer.zero_grad()
             
-            ppo_bar.update(1)
+            #ppo_bar.update(1)
         
-        ## housekeeping ##
+        ## average stats ##
         stats = self.process_stats(stats)
+        # update kl coefficient
+        self.kl_controller.update(stats['objective/kl'], batch_size)
+
+        return stats

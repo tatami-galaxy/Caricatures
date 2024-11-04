@@ -212,15 +212,57 @@ def train(args, accelerator):
 
     # train
     global_step = 0  # tracks total steps
-    #global_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
-    # eval bar
-    #eval_bar = tqdm(range(len(eval_dataloader)), position=1)
+    global_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
+    eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 
     while True:
-        #ppo_trainer.model.train()
+        ppo_trainer.model.train()
         # batches are left padded
         for batch in train_dataloader:
-            ppo_trainer.step(batch, low_mem=True)
+            train_stats = ppo_trainer.step(batch, low_mem=True)
+            accelerator.print('pg loss: {}, vf_loss: {}'.format(
+                train_stats['loss/policy'], train_stats['loss/value'])
+            )
+            global_bar.update(1)
+
+            # eval
+            if (global_step + 1) % args.eval_steps == 0:
+
+                accuracy = 0
+                ppo_trainer.model.eval()
+
+                for batch in eval_dataloader:
+                    with torch.no_grad():
+                        output_ids = accelerator.unwrap_model(ppo_trainer.model).generate(
+                            **batch,
+                            generation_config=generation_config,
+                            **gen_kwargs
+                        )
+
+                    # pad_acrss_processes to get equal length for each processs
+                    output_ids = accelerator.pad_across_processes(output_ids, dim=1, pad_index=tokenizer.pad_token_id)
+                    label_ids = accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
+                    # gather
+                    output_ids = accelerator.gather(output_ids) 
+                    label_ids = accelerator.gather(label_ids)  
+                    # decode
+                    batch_output = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+                    batch_input = tokenizer.batch_decode(batch['input_ids'], skip_special_tokens=True)
+                    outputs = [batch_output[b].replace(batch_input[b], '') for b in range(len(batch_output))]
+                    labels = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
+                    # compute accuracy
+                    acc = [o==l for o, l in zip(outputs, labels)]
+                    accuracy += sum(acc)/len(acc)
+
+                    eval_bar.update(1)
+
+                accelerator.print(accuracy/len(eval_dataloader))
+                ppo_trainer.model.train()
+
+            global_step += 1
+            if global_step == args.train_steps:
+                return
+
 
 
 def run():
