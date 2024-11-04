@@ -559,8 +559,8 @@ class PPOTrainer(RLTrainer):
             loss=dict(policy=pg_loss.detach(), value=vf_loss.detach(), ce_loss=ce_loss.detach(), total=loss.detach()),
             policy=dict(
                 entropy=entropy, approxkl=approxkl, policykl=policykl, clipfrac=pg_clipfrac,
-                advantages=advantages.detach(), advantages_mean=self.padded_mean(advantages.detach(), score_mask),
-                ratio=ratio.detach(), rewards=self.padded_mean(mini_batch_rewards, score_mask),
+                advantages_mean=self.padded_mean(advantages.detach(), score_mask),
+                ratio_mean=self.padded_mean(ratio.detach(), score_mask), rewards=self.padded_mean(mini_batch_rewards, score_mask),
                 kl=kl.detach()
             ),
             returns=dict(mean=return_mean, var=return_var),
@@ -581,25 +581,16 @@ class PPOTrainer(RLTrainer):
         mean_kl = torch.mean(stats['policy/kl'])
         mean_entropy = torch.mean(stats['policy/entropy'])
         mean_reward = torch.mean(stats['policy/rewards'])
-        stats = {
+        stats.update({
             'objective/kl': mean_kl,
-            'objective/kl_dist': stats['policy/kl'],
-            # TODO:
-            'objective/kl_coef': kl_coef,
+            'objective/kl_coef': self.kl_controller.value,
             'objective/entropy': mean_entropy,
-            'ppo/mean_non_score_reward': mean_non_score_reward,
-        }
+            'ppo/mean_reward': mean_reward,
+        })
 
-        for k, v in data['train_stats'].items():
-            try:
-                stats[f'ppo/{k}'] = torch.mean(v, axis=0)
-            except TypeError as e:
-                stats[f'ppo/{k}'] = None
-        try: 
-            stats['ppo/val/var_explained'] = 1 - stats['ppo/val/error'] / stats['ppo/returns/var']
-        except TypeError as e:
-            stats['ppo/val/var_explained'] = None
-        return stats
+        for k, v in stats.items():
+            pass
+    
         #self.kl_ctl.update(stats['objective/kl'], self.args.batch_size)
 
 
