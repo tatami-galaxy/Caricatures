@@ -234,11 +234,11 @@ def train(args, accelerator):
 
             # eval
             if (global_step + 1) % args.eval_steps == 0:
-
                 accuracy = 0
                 ppo_trainer.model.eval()
 
                 for batch in eval_dataloader:
+                    mb_accuracy = 0
                     for m in range(num_m_batches):
                         mini_batch = {
                             k: v[m*args.mini_batch_size:(m+1)*args.mini_batch_size] for k, v in batch.items()
@@ -264,12 +264,12 @@ def train(args, accelerator):
                         labels = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
                         # compute accuracy
                         acc = [o==l for o, l in zip(outputs, labels)]
-                        accuracy += sum(acc)/len(acc)
-                        accelerator.print(accuracy)
+                        mb_accuracy += sum(acc)/len(acc)
+
+                    accuracy += mb_accuracy/num_m_batches
 
                     eval_bar.update(1)
 
-                # TODO: fix
                 accelerator.print(accuracy/len(eval_dataloader))
                 ppo_trainer.model.train()
 
