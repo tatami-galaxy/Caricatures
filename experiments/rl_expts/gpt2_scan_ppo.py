@@ -127,6 +127,12 @@ def train(args, accelerator):
             [t+tokenizer.eos_token for t in targets],
             padding='max_length', max_length=args.max_input_length
         )['input_ids']
+        # eval labels
+        tokenizer.padding_side = "left"
+        model_inputs['eval_labels'] = tokenizer(
+            [t+tokenizer.eos_token for t in targets],
+            padding='max_length', max_length=args.max_input_length
+        )['input_ids']
 
         return model_inputs
 
@@ -211,6 +217,7 @@ def train(args, accelerator):
     )
 
     # train
+    num_m_batches = args.batch_size//args.mini_batch_size
     global_step = 0  # tracks total steps
     global_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
     eval_bar = tqdm(range(len(eval_dataloader)), position=1)
@@ -220,8 +227,8 @@ def train(args, accelerator):
         # batches are left padded
         for batch in train_dataloader:
             train_stats = ppo_trainer.step(batch, low_mem=True)
-            accelerator.print('pg loss: {}, vf_loss: {}'.format(
-                train_stats['loss/policy'], train_stats['loss/value'])
+            accelerator.print('pg loss: {}, vf_loss: {}, ce_loss: {}'.format(
+                train_stats['loss/policy'], train_stats['loss/value'], train_stats['loss/ce_loss'])
             )
             global_bar.update(1)
 
@@ -232,30 +239,37 @@ def train(args, accelerator):
                 ppo_trainer.model.eval()
 
                 for batch in eval_dataloader:
-                    with torch.no_grad():
-                        output_ids = accelerator.unwrap_model(ppo_trainer.model).generate(
-                            **batch,
-                            generation_config=generation_config,
-                            **gen_kwargs
-                        )
+                    for m in range(num_m_batches):
+                        mini_batch = {
+                            k: v[m*args.mini_batch_size:(m+1)*args.mini_batch_size] for k, v in batch.items()
+                        }
+                        with torch.no_grad():
+                            output_ids = accelerator.unwrap_model(ppo_trainer.model).generate(
+                                input_ids = mini_batch['input_ids'],
+                                attention_mask = mini_batch['attention_mask'],
+                                generation_config=generation_config,
+                                **gen_kwargs
+                            )
 
-                    # pad_acrss_processes to get equal length for each processs
-                    output_ids = accelerator.pad_across_processes(output_ids, dim=1, pad_index=tokenizer.pad_token_id)
-                    label_ids = accelerator.pad_across_processes(batch["labels"], dim=1, pad_index=tokenizer.pad_token_id)
-                    # gather
-                    output_ids = accelerator.gather(output_ids) 
-                    label_ids = accelerator.gather(label_ids)  
-                    # decode
-                    batch_output = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-                    batch_input = tokenizer.batch_decode(batch['input_ids'], skip_special_tokens=True)
-                    outputs = [batch_output[b].replace(batch_input[b], '') for b in range(len(batch_output))]
-                    labels = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
-                    # compute accuracy
-                    acc = [o==l for o, l in zip(outputs, labels)]
-                    accuracy += sum(acc)/len(acc)
+                        # pad_acrss_processes to get equal length for each processs
+                        output_ids = accelerator.pad_across_processes(output_ids, dim=1, pad_index=tokenizer.pad_token_id)
+                        label_ids = accelerator.pad_across_processes(mini_batch["eval_labels"], dim=1, pad_index=tokenizer.pad_token_id)
+                        # gather
+                        output_ids = accelerator.gather(output_ids) 
+                        label_ids = accelerator.gather(label_ids)  
+                        # decode
+                        batch_output = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+                        batch_input = tokenizer.batch_decode(mini_batch['input_ids'], skip_special_tokens=True)
+                        outputs = [batch_output[b].replace(batch_input[b], '') for b in range(len(batch_output))]
+                        labels = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
+                        # compute accuracy
+                        acc = [o==l for o, l in zip(outputs, labels)]
+                        accuracy += sum(acc)/len(acc)
+                        accelerator.print(accuracy)
 
                     eval_bar.update(1)
 
+                # TODO: fix
                 accelerator.print(accuracy/len(eval_dataloader))
                 ppo_trainer.model.train()
 

@@ -242,7 +242,8 @@ class PPOTrainer(RLTrainer):
             with torch.no_grad():
                 mini_batch = {k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in batch.items()}
                 output_ids = self.accelerator.unwrap_model(self.model).generate(
-                    **mini_batch,
+                    input_ids = mini_batch['input_ids'],
+                    attention_mask = mini_batch['attention_mask'],
                     generation_config=self.config.generation_config,
                     **self.config.gen_kwargs
                 )
@@ -542,7 +543,7 @@ class PPOTrainer(RLTrainer):
         )
 
         # total loss
-        loss =  pg_loss + self.config.vf_coef * vf_loss #+ ce_loss
+        loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
 
         # get stats
         pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask).detach()

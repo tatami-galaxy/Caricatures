@@ -115,6 +115,7 @@ def causal_model(command):
     # merge
     l1=[l11,l12]
 
+
     # STEP 2. Resolve S: Interpret twice/thrice for repetition as individual elements
     l2 = []
     nums = {'twice':2, 'thrice':3}
@@ -130,27 +131,26 @@ def causal_model(command):
             l.remove(num)
         l2.append(l)
 
+
     # STEP 3: Resolve V: Interpret opposite/around and handle direction repeats
     l3 = []
-    i = 0
-    while i < len(l2):
-        if l2[i] == "around" and i + 1 < len(l2):
-            if l2[i + 1] == "RTURN":
-                l3.extend(["RTURN"] * 4)  # Equivalent to turning around
-                i += 2  # Skip "RTURN"
-            elif l2[i + 1] == "LTURN":
-                l3.extend(["LTURN"] * 4)
-                i += 2  # Skip "LTURN"
-        elif l2[i] == "opposite" and i + 1 < len(l2):
-            if l2[i + 1] == "RTURN":
-                l3.extend(["RTURN"] * 2)  # Equivalent to 180-degree turn
-                i += 2  # Skip "RTURN"
-            elif l2[i + 1] == "LTURN":
-                l3.extend(["LTURN"] * 2)
-                i += 2  # Skip "LTURN"
-        else:
-            l3.append(l2[i])
-            i += 1
+    turns = {'opposite':2, 'around':4}
+    turn_actions = {'right': 'I_TURN_RIGHT', 'left': 'I_TURN_LEFT'}
+    for l in l2:
+        l31 = []
+        # has nested lists
+        for nl in l:
+            # find around/opposite, None otherwise
+            intersect = list(set(turns.keys()).intersection(set(nl)))
+            turn = intersect[0] if len(intersect) > 0 else None
+            # ['look', 'opposite', 'right']
+            # ['turn', 'opposite', 'right']
+            if turn == 'opposite':
+                pass
+            # look around right
+            elif turn == 'around':
+                nl.remove(turn)
+                
 
 
     # layer 2: apply interpretation function depending on word class
