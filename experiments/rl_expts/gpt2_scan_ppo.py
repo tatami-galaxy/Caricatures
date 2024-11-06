@@ -270,7 +270,7 @@ def train(args, accelerator):
 
                     eval_bar.update(1)
 
-                accelerator.print(accuracy/len(eval_dataloader))
+                accelerator.print('accuracy: {}'.format(accuracy/len(eval_dataloader)))
                 ppo_trainer.model.train()
 
             global_step += 1
