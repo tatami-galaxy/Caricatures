@@ -282,17 +282,12 @@ class PPOTrainer(RLTrainer):
         ).to(device)
         context_label_ids = tokenized_context['input_ids']
         # set context label padding to -100
-        """context_label_ids = [
+        context_label_ids = [
             [
                 (l if l != self.tokenizer.pad_token_id else self.config.ignore_index) for l in label
             ] for label in context_label_ids.tolist()
-        ]"""
+        ]
         context_label_ids = torch.tensor(context_label_ids).to(device)
-        print(self.tokenizer.decode(output_ids[0]))
-        print(self.tokenizer.decode(context_label_ids[0]))
-        print(output_ids.shape)
-        print(context_label_ids.shape)
-        quit()
 
         # collect into dict
         # output_ids -> context ids + generated action ids
@@ -349,6 +344,11 @@ class PPOTrainer(RLTrainer):
         # output = (lm_logits, loss=None, value)
         for m in range(num_m_batches):
             with torch.no_grad():
+                print(self.tokenizer.decode(output_ids_list[m]))
+                print(output_ids_list[m])
+                print('')
+                print(attention_mask_list[m])
+                quit()
                 logits, _, values = self.model(
                     input_ids=output_ids_list[m].to(self.accelerator.device),
                     attention_mask=attention_mask_list[m].to(self.accelerator.device)
