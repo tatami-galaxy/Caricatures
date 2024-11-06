@@ -344,10 +344,10 @@ class PPOTrainer(RLTrainer):
         # output = (lm_logits, loss=None, value)
         for m in range(num_m_batches):
             with torch.no_grad():
-                print(self.tokenizer.decode(output_ids_list[m]))
-                print(output_ids_list[m])
+                print(self.tokenizer.decode(output_ids_list[m][0]))
+                print(output_ids_list[m][0])
                 print('')
-                print(attention_mask_list[m])
+                print(attention_mask_list[m][0])
                 quit()
                 logits, _, values = self.model(
                     input_ids=output_ids_list[m].to(self.accelerator.device),
