@@ -282,11 +282,11 @@ class PPOTrainer(RLTrainer):
         ).to(device)
         context_label_ids = tokenized_context['input_ids']
         # set context label padding to -100
-        context_label_ids = [
+        """context_label_ids = [
             [
                 (l if l != self.tokenizer.pad_token_id else self.config.ignore_index) for l in label
             ] for label in context_label_ids.tolist()
-        ]
+        ]"""
         context_label_ids = torch.tensor(context_label_ids).to(device)
         print(self.tokenizer.decode(output_ids[0]))
         print(self.tokenizer.decode(context_label_ids[0]))
