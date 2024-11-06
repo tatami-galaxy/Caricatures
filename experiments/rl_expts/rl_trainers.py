@@ -344,11 +344,6 @@ class PPOTrainer(RLTrainer):
         # output = (lm_logits, loss=None, value)
         for m in range(num_m_batches):
             with torch.no_grad():
-                print(self.tokenizer.decode(output_ids_list[m][0]))
-                print(output_ids_list[m][0])
-                print('')
-                print(attention_mask_list[m][0])
-                quit()
                 logits, _, values = self.model(
                     input_ids=output_ids_list[m].to(self.accelerator.device),
                     attention_mask=attention_mask_list[m].to(self.accelerator.device)
@@ -373,6 +368,7 @@ class PPOTrainer(RLTrainer):
         ref_logits = self.pad_and_stack(ref_logit_list).to(device)
         values = self.pad_and_stack(values_list).to(device)
         # logprobs
+        # TODO: check
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
         ref_logprobs = self.logprobs_from_logits(ref_logits, gen_label_ids)
 
