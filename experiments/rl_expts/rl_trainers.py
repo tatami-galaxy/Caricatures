@@ -263,7 +263,8 @@ class PPOTrainer(RLTrainer):
         output_ids = self.pad_and_stack(output_list, side='left')
 
         # TODO: test
-        print(output_list[0])
+        print(output_list[0][0])
+        print('')
         print(output_ids[0])
         quit()
 
