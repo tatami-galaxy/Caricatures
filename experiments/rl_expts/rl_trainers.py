@@ -262,6 +262,11 @@ class PPOTrainer(RLTrainer):
         # stack output_list -> tensors of different length
         output_ids = self.pad_and_stack(output_list, side='left')
 
+        # TODO: test
+        print(output_list[0])
+        print(output_ids[0])
+        quit()
+
         return output_ids, label_ids
     
 
