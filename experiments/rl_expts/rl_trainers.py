@@ -262,19 +262,17 @@ class PPOTrainer(RLTrainer):
         # stack output_list -> tensors of different length
         output_ids = self.pad_and_stack(output_list, side='left')
 
-        # TODO: test
-        print(self.tokenizer.decode(output_list[0][0]))
-        print('')
-        print(self.tokenizer.decode(output_ids[0]))
-        quit()
-
         return output_ids, label_ids
     
 
     # re-tokenize, set padding
     def prepare_input_for_ppo_step(self, output_ids, gen_label_ids, device):
 
+        print(self.tokenizer.decode(output_ids[0]))
+
         output_ids, attention_mask = self.re_tokenize(output_ids, device)
+        print(self.tokenizer.decode(output_ids[0]))
+        quit()
         # context labels needed for ce loss for context -> TODO: use gen ids instead of output ids?
         # get only context label tokens -> model always generates context first
         all_tokens = self.tokenizer.batch_decode(output_ids)
