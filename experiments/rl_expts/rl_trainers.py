@@ -268,11 +268,8 @@ class PPOTrainer(RLTrainer):
     # re-tokenize, set padding
     def prepare_input_for_ppo_step(self, output_ids, gen_label_ids, device):
 
-        print(self.tokenizer.decode(output_ids[0]))
-
         output_ids, attention_mask = self.re_tokenize(output_ids, device)
-        print(self.tokenizer.decode(output_ids[0]))
-        quit()
+
         # context labels needed for ce loss for context -> TODO: use gen ids instead of output ids?
         # get only context label tokens -> model always generates context first
         all_tokens = self.tokenizer.batch_decode(output_ids)
@@ -291,6 +288,11 @@ class PPOTrainer(RLTrainer):
             ] for label in context_label_ids.tolist()
         ]
         context_label_ids = torch.tensor(context_label_ids).to(device)
+        print(self.tokenizer.decode(output_ids[0]))
+        print(self.tokenizer.decode(context_label_ids[0]))
+        print(output_ids.shape)
+        print(context_label_ids.shape)
+        quit()
 
         # collect into dict
         # output_ids -> context ids + generated action ids
