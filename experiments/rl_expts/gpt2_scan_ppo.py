@@ -223,10 +223,9 @@ def train(args, accelerator):
     eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 
     while True:
-        ppo_trainer.model.train()
         # batches are left padded
         for batch in train_dataloader:
-            train_stats = ppo_trainer.step(batch, low_mem=True)
+            train_stats = ppo_trainer.step(batch, low_mem=True, whiten_adv=True)
             accelerator.print('pg loss: {}, vf_loss: {}, ce_loss: {}'.format(
                 train_stats['loss/policy'], train_stats['loss/value'], train_stats['loss/ce_loss'])
             )

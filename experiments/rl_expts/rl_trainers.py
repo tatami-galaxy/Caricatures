@@ -129,6 +129,7 @@ class RLTrainer:
     
 
     def logprobs_from_logits(self, logits, labels):
+        # get log_softmax of the label token -> logp(a|s)
         # https://github.com/pytorch/pytorch/issues/563#issuecomment-330103591
         logp = torch.log(F.softmax(logits, dim=2) + self.config.epsilon)
         logpy = torch.gather(logp, 2, labels.unsqueeze(2)).squeeze(-1)
@@ -328,6 +329,7 @@ class PPOTrainer(RLTrainer):
         )
 
         # model forward
+        # ids, masks already padded
         output_ids = rl_inputs['output_ids'].to(device)
         attention_mask = rl_inputs['attention_mask'].to(device)
         output_ids_list = [
@@ -343,6 +345,7 @@ class PPOTrainer(RLTrainer):
         # need to do iteratively for large batch sizes
         # output = (lm_logits, loss=None, value)
         for m in range(num_m_batches):
+            # TODO: verify causal mask in decoder
             with torch.no_grad():
                 logits, _, values = self.model(
                     input_ids=output_ids_list[m].to(self.accelerator.device),
@@ -364,11 +367,11 @@ class PPOTrainer(RLTrainer):
 
         # stack lists
         # make sure same device
-        logits = self.pad_and_stack(logit_list).to(device)
-        ref_logits = self.pad_and_stack(ref_logit_list).to(device)
-        values = self.pad_and_stack(values_list).to(device)
+        logits = torch.vstack(logit_list).to(device)
+        ref_logits = torch.vstack(ref_logit_list).to(device)
+        values = torch.vstack(values_list).to(device)
+
         # logprobs
-        # TODO: check
         logprobs = self.logprobs_from_logits(logits, gen_label_ids)
         ref_logprobs = self.logprobs_from_logits(ref_logits, gen_label_ids)
 
@@ -438,13 +441,14 @@ class PPOTrainer(RLTrainer):
         return rewards
 
 
-    def compute_advantages(self, values, rewards, mask):
+    def compute_advantages(self, values, rewards, mask, whiten_adv=False):
         lastgaelam = 0
         # reversed since delta_t depends on delta_t+1, delta_t+2, ...
         advantages_reversed = []
 
         # eq 11 and eq 12 ppo paper : https://arxiv.org/pdf/1707.06347
         with torch.no_grad():
+            # nextvalues[i][j] = values[i][j+1]
             nextvalues = values.roll(-1, dims=-1)
             nextvalues[:, -1] = 0
             delta = rewards + self.config.gamma * nextvalues - values
@@ -457,13 +461,14 @@ class PPOTrainer(RLTrainer):
 
             # mask out context and padding positions
             advantages = torch.mul(advantages, mask)
-            # whiten
-            advantages = self.whiten(advantages, mask)
+            # TODO: whiten?
+            if whiten_adv:
+                advantages = self.whiten(advantages, mask)
 
             return advantages
 
 
-    def run_minibatch(self, mini_batch, mini_batch_rewards, low_mem=False):
+    def run_minibatch(self, mini_batch, mini_batch_rewards, low_mem=False, whiten_adv=False):
 
         device = 'cpu' if low_mem else self.accelerator.device
 
@@ -478,7 +483,7 @@ class PPOTrainer(RLTrainer):
         score_mask = mini_batch['score_mask']
 
         # compute advantages from values and rewards
-        advantages = self.compute_advantages(values, mini_batch_rewards, score_mask)
+        advantages = self.compute_advantages(values, mini_batch_rewards, score_mask, whiten_adv)
 
         # model forward
         # output = (lm_logits, loss=None, value)
@@ -505,8 +510,7 @@ class PPOTrainer(RLTrainer):
             values + self.config.cliprange_value
         )
         # y values for value function fitting
-        # instead of using the single sample return,
-        # use bootstrapped estimate of the value
+        # instead of using the single sample return use bootstrapped estimate of the value
         returns = advantages + values
         # equation 9 ppo paper : https://arxiv.org/pdf/1707.06347
         vf_losses1 = (vpred - returns)**2
@@ -520,6 +524,7 @@ class PPOTrainer(RLTrainer):
 
         # calculate policy gradient loss
         # importance sampling ratio
+        # TODO: ref_logprobs instead of old_logprobs?
         ratio = torch.exp(logprobs - old_logprobs)
         # clipping surrogate, section 6.1 ppo paper
         # https://arxiv.org/pdf/1707.06347
@@ -532,17 +537,12 @@ class PPOTrainer(RLTrainer):
         # clamped loss following DQL
         # https://discuss.pytorch.org/t/creating-a-clipped-loss-function/12022/4
         pg_loss = torch.clamp(torch.max(pg_losses, pg_losses2), min=-1, max=1)
-        # TODO: zero out context positions and padding positions in pg_loss?
-        # compute avg pg_loss to get a scalar loss
-        pg_loss = torch.sum(pg_loss) / torch.sum(score_mask)
+        # compute avg pg_loss to get a scalar losss
+        #pg_loss = self.padded_mean(pg_loss, score_mask)
 
+        # TODO: fix ce_loss, append to pg_loss and average
         # cross entropy loss for context
-        # shift so that tokens < n predict n
-        shift_logits = logits[..., :-1, :].contiguous()
-        shift_context_labels = context_label_ids[..., 1:].contiguous()
-        ce_loss = self.ce_loss_fct(
-            shift_logits.view(-1, shift_logits.size(-1)), shift_context_labels.view(-1)
-        )
+        
 
         # total loss
         loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
@@ -599,11 +599,15 @@ class PPOTrainer(RLTrainer):
         return mean_stats
 
 
-    def step(self, batch, low_mem=False):
+    def step(self, batch, low_mem=False, whiten_adv=False):
 
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
         num_m_batches = batch_size//mini_batch_size
+
+        # for deterministic forward pass
+        self.model.eval()
+        self.ref_model.eval()
 
         ## sample batch ##
         # output_ids -> context ids + generated action ids
@@ -623,13 +627,14 @@ class PPOTrainer(RLTrainer):
         ## run minibatches and update policy ##
         #ppo_bar = tqdm(range(self.config.ppo_epochs), disable=not self.accelerator.is_main_process)
         stats = []
+        self.model.train()
         for _ in range(self.config.ppo_epochs):
             for m in range(num_m_batches):
                 mini_batch = {
                     k: v[m*mini_batch_size:(m+1)*mini_batch_size] for k, v in forward_dict.items()
                 }
                 mini_batch_rewards = rewards[m*mini_batch_size:(m+1)*mini_batch_size]
-                loss, train_stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem)
+                loss, train_stats = self.run_minibatch(mini_batch, mini_batch_rewards, low_mem, whiten_adv)
                 stats.append(train_stats)
 
                 # backprop
