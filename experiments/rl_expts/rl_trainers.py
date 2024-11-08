@@ -24,7 +24,7 @@ class PPOConfig:
     init_kl_coef: float =  0.2
     target: float = 6.0
     horizon: float = 10000
-    ppo_epochs: int = 5
+    ppo_epochs: int = 2
     gamma: float = 1
     lam: float = 0.95
     cliprange_value: float = 0.2
@@ -526,7 +526,9 @@ class PPOTrainer(RLTrainer):
         # importance sampling ratio
         # TODO: ref_logprobs instead of old_logprobs?
         ratio = torch.exp(logprobs - old_logprobs)
-        # clipping surrogate, section 6.1 ppo paper
+        # clipping surrogate, section 6.1 ppo paper        
+        #ce_mask = torch.ones_like(context_label_ids)
+        #ce_mask[context_label_ids == self.config.ignore_index] = 0
         # https://arxiv.org/pdf/1707.06347
         pg_losses = -advantages * ratio
         pg_losses2 = -advantages * torch.clamp(
@@ -540,12 +542,15 @@ class PPOTrainer(RLTrainer):
         # compute avg pg_loss to get a scalar losss
         #pg_loss = self.padded_mean(pg_loss, score_mask)
 
-        # TODO: fix ce_loss, append to pg_loss and average
         # cross entropy loss for context
-        
+        # TODO: lower ce_loss?
+        ce_loss = self.ce_loss_fct(logits.view(-1, logits.size(-1)), context_label_ids.view(-1))
+        # append to pg_loss and average
+        pg_loss[context_label_ids != self.config.ignore_index] = ce_loss
+        pg_loss = self.padded_mean(pg_loss, attention_mask)
 
         # total loss
-        loss =  pg_loss + self.config.vf_coef * vf_loss + ce_loss
+        loss =  pg_loss + (self.config.vf_coef * vf_loss)
 
         # get stats
         pg_clipfrac = self.padded_mean(torch.gt(pg_losses2, pg_losses).double(), score_mask).detach()
@@ -560,7 +565,7 @@ class PPOTrainer(RLTrainer):
         value_var = self.padded_var(values, score_mask).detach()
 
         stats = dict(
-            loss=dict(policy=pg_loss.detach(), value=vf_loss.detach(), ce_loss=ce_loss.detach(), total=loss.detach()),
+            loss=dict(policy=pg_loss.detach(), value=vf_loss.detach(), total=loss.detach()),
             policy=dict(
                 entropy=entropy, approxkl=approxkl, policykl=policykl, clipfrac=pg_clipfrac,
                 advantages_mean=self.padded_mean(advantages.detach(), score_mask),

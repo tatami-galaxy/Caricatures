@@ -203,6 +203,7 @@ def train(args, accelerator):
         batch_size=args.batch_size,
         mini_batch_size=args.mini_batch_size,
         max_input_length=args.max_input_length,
+        ppo_epochs=args.ppo_epochs,
         generation_config=generation_config,
         gen_kwargs=gen_kwargs,
     )
@@ -220,15 +221,13 @@ def train(args, accelerator):
     num_m_batches = args.batch_size//args.mini_batch_size
     global_step = 0  # tracks total steps
     global_bar = tqdm(range(global_step, args.train_steps), disable=not accelerator.is_main_process, position=0)
-    eval_bar = tqdm(range(len(eval_dataloader)), position=1)
+    #eval_bar = tqdm(range(len(eval_dataloader)), position=1)
 
     while True:
         # batches are left padded
         for batch in train_dataloader:
             train_stats = ppo_trainer.step(batch, low_mem=True, whiten_adv=True)
-            accelerator.print('pg loss: {}, vf_loss: {}, ce_loss: {}'.format(
-                train_stats['loss/policy'], train_stats['loss/value'], train_stats['loss/ce_loss'])
-            )
+            accelerator.print('pg loss: {}, vf_loss: {}'.format(train_stats['loss/policy'], train_stats['loss/value']))
             global_bar.update(1)
 
             # eval
@@ -267,10 +266,9 @@ def train(args, accelerator):
 
                     accuracy += mb_accuracy/num_m_batches
 
-                    eval_bar.update(1)
+                    #eval_bar.update(1)
 
                 accelerator.print('accuracy: {}'.format(accuracy/len(eval_dataloader)))
-                ppo_trainer.model.train()
 
             global_step += 1
             if global_step == args.train_steps:
@@ -317,7 +315,7 @@ def run():
     parser.add_argument(
         '--max_input_length',
         type=int,
-        default=300
+        default=512
     )
     parser.add_argument(
         '--max_gen_length',
@@ -364,6 +362,11 @@ def run():
     parser.add_argument(
         "--warmup_steps",
         default=0,
+        type=int,
+    )
+    parser.add_argument(
+        "--ppo_epochs",
+        default=2,
         type=int,
     )
     parser.add_argument(
