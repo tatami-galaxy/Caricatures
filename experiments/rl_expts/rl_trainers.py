@@ -425,13 +425,14 @@ class PPOTrainer(RLTrainer):
         return score, score_mask
     
 
-    def compute_rewards(self, forward_dict, kl_penalty=True):
+    def compute_rewards(self, forward_dict, reward_kl_penalty=True):
         # https://arxiv.org/pdf/1909.08593 -> equation 2
         logprobs = forward_dict['logprobs']
         ref_logprobs = forward_dict['ref_logprobs']
         score = forward_dict['score']
 
-        if kl_penalty:
+        if reward_kl_penalty:
+            # TODO: old_logprobs instead of ref_logprobs?
             kl = logprobs - ref_logprobs  # will be zero initially
             rewards = -self.kl_controller.value * kl
             rewards = rewards + score
@@ -604,7 +605,7 @@ class PPOTrainer(RLTrainer):
         return mean_stats
 
 
-    def step(self, batch, low_mem=False, whiten_adv=False):
+    def step(self, batch, low_mem=False, whiten_adv=False, reward_kl_penalty=True):
 
         batch_size = self.config.batch_size
         mini_batch_size = self.config.mini_batch_size
@@ -627,7 +628,7 @@ class PPOTrainer(RLTrainer):
         forward_dict = self.forward_with_gen_samples(output_ids, label_ids, low_mem)
         
         ## compute rewards ##
-        rewards = self.compute_rewards(forward_dict)
+        rewards = self.compute_rewards(forward_dict, reward_kl_penalty=reward_kl_penalty)
         
         ## run minibatches and update policy ##
         #ppo_bar = tqdm(range(self.config.ppo_epochs), disable=not self.accelerator.is_main_process)

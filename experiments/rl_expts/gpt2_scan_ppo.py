@@ -226,7 +226,12 @@ def train(args, accelerator):
     while True:
         # batches are left padded
         for batch in train_dataloader:
-            train_stats = ppo_trainer.step(batch, low_mem=True, whiten_adv=True)
+            train_stats = ppo_trainer.step(
+                batch,
+                low_mem=True,
+                whiten_adv=True,
+                reward_kl_penalty=True,
+            )
             accelerator.print('pg loss: {}, vf_loss: {}'.format(train_stats['loss/policy'], train_stats['loss/value']))
             global_bar.update(1)
 

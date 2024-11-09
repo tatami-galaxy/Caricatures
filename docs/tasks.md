@@ -1,5 +1,12 @@
-- PPO -> boundless das
-- PPO -> circuit discovery?
+- PPO
+    - freeze network for learning V?
+    - another model to learn V?
+    - boundless das
+    - circuit discovery?
+
 - causal model
-- RASP-L -> ground truth circuit
+
+- RASP-L
+    - ground truth circuit
+
 - STE, Gumbel Softmax?
