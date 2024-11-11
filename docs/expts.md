@@ -6,9 +6,12 @@
 
 #### Causal model for SCAN : 
 - `causal_model_v1_pyvene.py` under `/experiments/SCAN/causal_model/`
+- `causal_model_v2_TD.py` under `/experiments/SCAN/causal_model/`
 
 #### Pyvene experiments :
 - `pyvene_expts.ipynb` under `/experiments/pyvene/`
 
 #### Intervention experiment :
 - `gpt2_scan_interventions_v1.ipynb` under `/experiments/SCAN/interventions/`
+
+    

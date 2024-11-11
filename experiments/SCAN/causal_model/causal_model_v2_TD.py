@@ -1,3 +1,5 @@
+import copy
+
 from datasets import load_dataset
 
 # Top down CAM
@@ -6,94 +8,6 @@ from datasets import load_dataset
 # 3. Resolve V: Identify and interpret opposite/around
 # 4. Resolve D: Identify and interpret left/right/turn left/turn right
 # 5. Resolve U: Identify and interpret all verbs
-
-actions = {
-    "walk": "I_WALK",
-    "run": "I_RUN",
-    "jump": "I_JUMP",
-    "look": "I_LOOK"
-    }
-
-turns = {
-    "around": "yyyy",
-    "opposite": "yy"
-}
-
-directions = {
-    "right": "I_TURN_RIGHT",
-    "left": "I_TURN_LEFT"
-}
-
-nums = {
-    "twice": "xx",
-    "thrice": "xxx"
-}
-
-# all mappings together 
-classes = [actions, turns, directions, nums]
-# inverted turns and directions mappings
-turns_inv = {v: k for k, v in turns.items()}
-nums_inv = {v: k for k, v in nums.items()}
-
-# variable binding function
-# can be separated into at least 2 steps :
-# 1. mapping turns
-# 2. mapping nums
-
-def variable_binding(l):
-
-    # check if no nums or turns
-    # return merged string
-    if not any(x in l for x in list(turns_inv.keys())+list(nums_inv.keys())):
-        return [' '.join(l)]
-
-    # check for turns
-    for n, v in turns_inv.items():
-        if n not in l:
-            continue
-        ind = l.index(n)
-        op = l[ind]
-        # for around, need to perform action with each right or left turn
-        if v == 'around':
-            # last item in list is the action
-            # 'turn' is also an action but its fused with the right and left turn commands
-            # in case of 'turn' no need to append action to command
-            # turn modifies the item before it
-            if l[-1] in set(actions.values()):
-                dec_act = (l[ind-1]+' '+l[-1]+' ')*len(op)
-            else:
-                dec_act = (l[ind-1]+' ')*len(op)
-            # strip to remove trailing whitespace
-            dec_act = dec_act.strip()
-            l[ind] = dec_act
-
-        # for opposite, need to complete 180 turn and then perform action
-        else:
-            if l[-1] in set(actions.values()):
-                dec_act = (l[ind-1]+' ')*len(op) + l[-1]
-            else:
-                dec_act = (l[ind-1]+' ')*len(op)
-            # strip to remove trailing whitespace
-            dec_act = dec_act.strip()
-            l[ind] = dec_act
-
-        # remove the turn placeholder and optionally the action
-        l.pop(ind-1)
-        if l[-1] in set(actions.values()):
-            l.pop(-1)
-
-    # check for nums (TODO : separate out)       
-    for n, v in nums_inv.items():
-        if n not in l:
-            continue
-        ind = l.index(n)
-        op = l[ind]
-        # num modifies all the items after it
-        dec_act = ((' '.join(l[ind+1:])+' ')*len(op)).strip()
-        l[ind] = dec_act
-
-    # the first item is the modified string
-    return l[:1]
 
 
 def causal_model(command):
@@ -119,7 +33,6 @@ def causal_model(command):
     # STEP 2. Resolve S: Interpret twice/thrice for repetition as individual elements
     l2 = []
     nums = {'twice':2, 'thrice':3}
-    # Does doing it sequentially make sense since AR model also computes sequentially?
     for l in l1:
         # find twice/thrice, None otherwise
         intersect = list(set(nums.keys()).intersection(set(l)))
@@ -129,28 +42,80 @@ def causal_model(command):
         if num is not None:
             l[:l.index(num)] = [l[:l.index(num)]]*nums[num]
             l.remove(num)
-        l2.append(l)
+            l2.append(l)
+        else: l2.append([l])
 
 
     # STEP 3: Resolve V: Interpret opposite/around and handle direction repeats
     l3 = []
-    turns = {'opposite':2, 'around':4}
-    turn_actions = {'right': 'I_TURN_RIGHT', 'left': 'I_TURN_LEFT'}
+    ar_opp_interp = {'around':['turn', 'action']*4, 'opposite':['turn', 'turn', 'action']}
     for l in l2:
-        l31 = []
+        new_l = []
         # has nested lists
         for nl in l:
             # find around/opposite, None otherwise
-            intersect = list(set(turns.keys()).intersection(set(nl)))
-            turn = intersect[0] if len(intersect) > 0 else None
-            # ['look', 'opposite', 'right']
-            # ['turn', 'opposite', 'right']
-            if turn == 'opposite':
-                pass
-            # look around right
-            elif turn == 'around':
-                nl.remove(turn)
-                
+            item = copy.copy(nl)
+            intersect = list(set(ar_opp_interp.keys()).intersection(set(nl)))
+            ar_opp = intersect[0] if len(intersect) > 0 else None
+            if ar_opp is not None:
+                # resolve around/opposite
+                resl = ar_opp_interp[ar_opp]
+                item[item.index(ar_opp)] = resl
+            new_l.append(item)
+        l3.append(new_l)
+
+
+    # STEP 4: Resolve D: Identify and interpret directions
+    l4 = []
+    dircetions = {'left': 'I_TURN_LEFT', 'right': 'I_TURN_RIGHT'}
+    for l in l3:
+        new_l = []
+        # has nested lists
+        for nl in l:
+            item = copy.copy(nl)
+            # get index of resolved around/opposite else None
+            # using the fact that resolved item is a list
+            # TODO: what if no around/opposite?
+            resl_ind = [isinstance(i, list) for i in item].index(True) if any(isinstance(i, list) for i in item) else None
+            # replace turns with actions using the given direction
+            if resl_ind is not None:
+                # get direction
+                dir = item[resl_ind + 1]
+                # replace turn with turn action
+                item = [dircetions[dir] if i=='turn' else i for i in item[resl_ind]]
+
+
+            new_l.append(item)
+        l4.append(new_l)
+
+    
+    # STEP 5: Resolve U: Identify and replace all verbs
+
+
+
+    # Resolve D: Interpret directions (left/right/turn left/turn right)
+    l4 = []
+    for sub in l3:
+        new_sub = []
+        skip_next = False
+        for i, item in enumerate(sub):
+            if skip_next:
+                skip_next = False
+                continue
+            if item == 'turn' and i + 1 < len(sub):
+                if sub[i + 1] == 'right':
+                    new_sub.append('RTURN')
+                    skip_next = True  # Skip 'right'
+                elif sub[i + 1] == 'left':
+                    new_sub.append('LTURN')
+                    skip_next = True  # Skip 'left'
+            elif item == 'right':
+                new_sub.append('RTURN')
+            elif item == 'left':
+                new_sub.append('LTURN')
+            else:
+                new_sub.append(item)
+        l4.append(new_sub)
 
 
     # layer 2: apply interpretation function depending on word class
@@ -179,7 +144,8 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    command = 'look around right twice and turn left thrice'
+    command = 'look around right twice and turn opposite left twice'
+    #command = 'turn left twice and jump'
     causal_model(command)
 
     ## testing end ##
