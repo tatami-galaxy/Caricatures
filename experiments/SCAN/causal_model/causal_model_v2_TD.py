@@ -1,152 +1,174 @@
 import copy
-
+from tqdm.auto import tqdm
 from datasets import load_dataset
 
-# Top down CAM
-# 1. Resolve C: Split sentence based on and /after
-# 2. Resolve S: Identify and interpret twice/thrice
-# 3. Resolve V: Identify and interpret opposite/around
-# 4. Resolve D: Identify and interpret left/right/turn left/turn right
-# 5. Resolve U: Identify and interpret all verbs
+# Longest command is 9 words : https://arxiv.org/pdf/1711.00350
+max_len = 9
+placeholder = '<empty>'
+verbs = {
+    'turn': placeholder,
+    'jump': 'I_JUMP',
+    'look': 'I_LOOK',
+    'walk': 'I_WALK',
+    'run': 'I_RUN'
+}
+directions = {
+    'left': 'I_TURN_LEFT',
+    'right': 'I_TURN_RIGHT',
+    placeholder: placeholder
+}
+around_opposite = {
+    'around': ['direction', 'action']*4,
+    'opposite': ['direction', 'direction', 'action'],
+    placeholder: ['direction', 'action']
+}
+nums = {
+    'twice': 2,
+    'thrice': 3,
+    placeholder: 1,
+}
+conjs = ['and', 'after']
+
+# command structure
+command_structure = {
+    0: verbs,
+    1: around_opposite,
+    2: directions,
+    3: nums,
+    4: conjs,
+    5: verbs, # 0
+    6: around_opposite, # 1
+    7: directions, # 2
+    8: nums, # 3
+}
 
 
 def causal_model(command):
 
     # Step 0: Split the command into lexical items (words)
-    l0=command.split()
-    # STEP 1. Resolve C: Split based on 'and' or 'after'
-    if 'and' in l0:
+    l0 = command.split()
+    # STEP 1. Resolve C: Split based on conj
+    conj = l0[4]
+    if conj == 'and':
         # maintain order of command
-        l11=l0[:l0.index("and")] 
-        l12= l0[l0.index("and")+1:]
-    elif 'after' in l0:
+        l11 = l0[:4] 
+        l12 = l0[5:]
+        # merge
+        l1 = [l11, l12]
+    elif conj == 'after':
         # reverse order of command
-        l11= l0[l0.index("after")+1:]
-        l12=l0[:l0.index("after")] 
+        l11 = l0[5:]
+        l12 = l0[:4] 
+        # merge
+        l1 = [l11, l12]
     else:
-        l11=l0
-        l12=[]
-    # merge
-    l1=[l11,l12]
+        l1 = [l0[:4]]
 
 
     # STEP 2. Resolve S: Interpret twice/thrice for repetition as individual elements
     l2 = []
-    nums = {'twice':2, 'thrice':3}
     for l in l1:
-        # find twice/thrice, None otherwise
-        intersect = list(set(nums.keys()).intersection(set(l)))
-        num = intersect[0] if len(intersect) > 0 else None
-        # repeat preceeding elements twice/thrice
-        # merge repeated elements into nested list
-        if num is not None:
-            l[:l.index(num)] = [l[:l.index(num)]]*nums[num]
-            l.remove(num)
-            l2.append(l)
-        else: l2.append([l])
+        # find nums and resolve
+        num = l[-1]
+        l_copy = [l[:-1]]*nums[num]
+        l2.append(l_copy)
 
 
     # STEP 3: Resolve V: Interpret opposite/around and handle direction repeats
     l3 = []
-    ar_opp_interp = {'around':['turn', 'action']*4, 'opposite':['turn', 'turn', 'action']}
     for l in l2:
         new_l = []
         # has nested lists
         for nl in l:
-            # find around/opposite, None otherwise
+            # resolve around/opposite
             item = copy.copy(nl)
-            intersect = list(set(ar_opp_interp.keys()).intersection(set(nl)))
-            ar_opp = intersect[0] if len(intersect) > 0 else None
-            if ar_opp is not None:
-                # resolve around/opposite
-                resl = ar_opp_interp[ar_opp]
-                item[item.index(ar_opp)] = resl
+            ar_opp = nl[1]
+            resl = around_opposite[ar_opp]
+            item[1] = resl
             new_l.append(item)
         l3.append(new_l)
 
 
     # STEP 4: Resolve D: Identify and interpret directions
     l4 = []
-    dircetions = {'left': 'I_TURN_LEFT', 'right': 'I_TURN_RIGHT'}
     for l in l3:
         new_l = []
         # has nested lists
         for nl in l:
             item = copy.copy(nl)
-            # get index of resolved around/opposite else None
-            # using the fact that resolved item is a list
-            # TODO: what if no around/opposite?
-            resl_ind = [isinstance(i, list) for i in item].index(True) if any(isinstance(i, list) for i in item) else None
-            # replace turns with actions using the given direction
-            if resl_ind is not None:
-                # get direction
-                dir = item[resl_ind + 1]
-                # replace turn with turn action
-                item = [dircetions[dir] if i=='turn' else i for i in item[resl_ind]]
-
-
+            # get direction
+            dir = nl[-1]
+            # replace direction in around/opposite
+            item[1] = [directions[dir] if i == 'direction' else i for i in nl[1]]
+            del item[-1]
             new_l.append(item)
         l4.append(new_l)
+            
 
-    
     # STEP 5: Resolve U: Identify and replace all verbs
+    l5 = []
+    for l in l4:
+        new_l = []
+        # has nested lists
+        for nl in l:
+            item = copy.copy(nl)
+            # get verb
+            verb = nl[0]
+            # replace direction in around/opposite
+            item[1] = [verbs[verb] if i == 'action' else i for i in nl[1]]
+            # only one term left
+            del item[0]
+            # remove unnecessary nesting
+            item = item[0]
+            new_l.append(item)
+        l5.append(new_l)
 
 
+    # Remove placeholders
+    l6 = []
+    for l in l5:
+        if len(l) == 0: continue
+        for nl in l:
+            item = placeholder.join(nl)
+            l6.append(item)
+    action = placeholder.join(l6)
+    action = action.split(placeholder)
+    action = [a for a in action if a != '']
+    action = ' '.join(action)
 
-    # Resolve D: Interpret directions (left/right/turn left/turn right)
-    l4 = []
-    for sub in l3:
-        new_sub = []
-        skip_next = False
-        for i, item in enumerate(sub):
-            if skip_next:
-                skip_next = False
-                continue
-            if item == 'turn' and i + 1 < len(sub):
-                if sub[i + 1] == 'right':
-                    new_sub.append('RTURN')
-                    skip_next = True  # Skip 'right'
-                elif sub[i + 1] == 'left':
-                    new_sub.append('LTURN')
-                    skip_next = True  # Skip 'left'
-            elif item == 'right':
-                new_sub.append('RTURN')
-            elif item == 'left':
-                new_sub.append('LTURN')
-            else:
-                new_sub.append(item)
-        l4.append(new_sub)
+    return action
 
 
-    # layer 2: apply interpretation function depending on word class
-    l21 = [classes[[w in c for c in classes].index(True)][w] for w in l11]
-    l22 = [classes[[w in c for c in classes].index(True)][w] for w in l12]
+def add_empty_token(x):
+    command_str = x['commands']
+    command = command_str.split()
+    padded_command = []
+    index = 0
+    c = 0
+    while index < max_len:
+        expected_cs = command_structure[index]
+        if c < len(command) and command[c] in expected_cs:
+            padded_command.append(command[c])
+            c += 1
+        else:
+            padded_command.append(placeholder)
+        index += 1
 
-    # reverse items in list for easier parsing
-    l21 = list(reversed(l21))
-    l22 = list(reversed(l22))
-
-    #l2=[l21,l22]
-
-    # layer 3: variable binding
-    l31 = variable_binding(l21)
-    l32 = variable_binding(l22)
-
-    l3=[l31,l32]
-
-    # layer 4: action sequence output
-    sequence = ' '.join([item for sublist in l3 for item in sublist])
-    
-    return sequence.strip()
+    x[input_column] = ' '.join(padded_command)
+    return x
 
 
 if __name__ == '__main__':
 
     ## testing ##
 
-    command = 'look around right twice and turn opposite left twice'
-    #command = 'turn left twice and jump'
-    causal_model(command)
+    #command = 'look around right twice and turn opposite left twice'
+    #command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
+    #command = 'run opposite left <empty> after walk <empty> right <empty>'
+    #command = 'turn around right twice after run around right thrice'
+    #command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
+    #print(causal_model(command))
+    #quit()
 
     ## testing end ##
 
@@ -162,10 +184,25 @@ if __name__ == '__main__':
     total_len = sum([len(s) for s in data_splits])
 
     accuracy = 0
+    bar = tqdm(range(total_len))
     for dataset in data_splits:
-        for x in dataset:
-            command = x['commands']
-            label = x['actions']
-            output = causal_model(command)
-            if label == output: accuracy += 1
+        column_names = dataset.column_names
+        input_column = column_names[0]
+        dataset = dataset.map(
+            add_empty_token,
+            batched=False,
+            #desc="Running tokenizer on dataset",
+        )
+        for example in dataset:
+            output = causal_model(example['commands'])
+            label = example['actions']
+            if label == output:
+                accuracy += 1
+            else:
+                print(example['commands'])
+                print(label)
+                print(output)
+                quit()
+            bar.update(1)
+
     print('accuracy on simple and length splits : {}'.format(accuracy/total_len))
