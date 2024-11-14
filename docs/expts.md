@@ -1,17 +1,11 @@
-#### SCAN finetuning : 
+### SCAN finetuning : 
 - models : t5, flan-t5, gpt2, distilgpt2
-- code : 
-    - `gpt_scan_test_gen_with_empty.py` under `/experiments/SCAN/decoder/`
-    - `t5_scan.py` under `/experiments/SCAN/seq2seq/`
 
-
-#### Causal model for SCAN : 
-- `causal_model_v1_pyvene.py` under `/experiments/SCAN/causal_model/`
-- `causal_model_v2_TD.py` under `/experiments/SCAN/causal_model/`
+### Causal model for SCAN : 
 
 Each example in the SCAN dataset is aimed at converting a natural language command to a sequence of actions. 
 
-$$ InputCommand \longrightarrow OutputSequence$$
+$ InputCommand \longrightarrow OutputSequence$
 
 Phrase Structure Grammar :
 
@@ -50,11 +44,22 @@ In the context of SCAN, a CAM (compositional abstraction model) should recover t
 If the model has really been able to understand the compositional abstraction of the data in the form of PSG here, it should follow the sequence of PSG to resolve nodes and that can only be accomplished in one of two ways listed above. 
 
 
-#### Intervention experiment :
-- `gpt2_scan_interventions_v1.ipynb` under `/experiments/SCAN/interventions/`
+### Intervention experiments :
 
 Intervention experiments aim to test aligment between the causal or algorithmic solution and the network being analyzed. This is done using pairs or inputs and counterfactual inputs. To test if a network component is a causal abstraction of a casual variable, that is if they are aligned, the variable and network component values are replaced with their counterfactual values, all else being kept unchanged. For perfect alignment, the two interventions should always produce identical results. 
 
-When the network is an encoder, the computation is a single forward pass through the model at t = 0. If the intervention occurs at a component at layer i, it can only influence computation at layer j > i.
+#### Encoder : 
+- When the network is an encoder, the computation is a single forward pass through the model at t = 0. If the intervention occurs at a component at layer i, it only influences computation at layer j > i. Here we need to assume that the computation we are interested in is localized in the intervened network component. In reality this assumption might not be true and the computation might be distributed in other components in the same or adjacent layers (Aside: Does the type of positional embedding have an impact on this?). The hypothesis is that the more the computation "leaks out" of the intervened component, the worse the alignment will be.  
 
-In case when the network is an autoregressive decoder, the network has to generate one token per time step t, after the intervention on the initial input or prompt at layer i. Therefore at time t > 0 and layer j < i token representations that are causally influenced by the intervention also attends over input representations prior to the intervention. 
+#### Decoder : 
+- In case when the network is an autoregressive decoder, the network has to generate one token per time step, after the intervention on the initial input or prompt at layer i. Therefore the computation can not only leak into other components or layers, but also across time steps. Also if the computation occurs at t = t1 > 0, then intervention at t = 0 will not lead to any alignment. To search for this, for a given causal variable we could generate (input, counterfactual input) pairs where the computation corresponding to the causal variable can realistically occur at t > 0. For example : 
+
+    `base input = turn right and jump twice`
+
+    `source input = turn right and jump thrice`
+
+    Here the computation corresponding to resolving repetitions can in theory happen after the decoder has generated the actions for 'jump'. In that case the intervention needs to be after that generation time step.
+
+- Does the "leaking" of the computation into other layers have a greater impact on alignment in case of decoders? This might be true because if there is a leak across time steps then that might imply that the leak across layers or components gets compounded. 
+
+- Can circuit discovery effectively deal with the leaking problem?
