@@ -58,9 +58,7 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
 
     `source input = turn right and jump thrice`
 
-    Here the computation corresponding to resolving repetitions can in theory happen after the decoder has generated the actions for 'jump'. In that case the intervention needs to be after that generation time step.
-
-    - If we are only interested in top down or bottom up parses, what does that mean for interventions at different time steps?
+    Here the computation corresponding to resolving repetitions can in theory happen after the decoder has generated the actions for 'jump'. In that case the intervention needs to be after that generation time step. If we are only interested in top down or bottom up parses, we can prune out interventions at certain timesteps. For example in the bottom up parse, the resolution of `and/after` is the last computation. However in order to do autoregressive decoding, the model must resolve this before it emits the first token. Therefore this resolution must happen at t = 0. Can we do this systematically for all the variables we are interested in?
 
 - Does the "leaking" of the computation into other layers have a greater impact on alignment in case of decoders? This might be true because if there is a leak across time steps then that might imply that the leak across layers or components gets compounded. 
 
