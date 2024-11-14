@@ -2,6 +2,15 @@ import copy
 from tqdm.auto import tqdm
 from datasets import load_dataset
 
+# Top down CAM 
+
+# 1. Resolve C: Split sentence based on and/after
+# 2. Resolve S: Identify and interpret twice/thrice
+# 3. Resolve V: Identify and interpret opposite/around
+# 4. Resolve D: Identify and interpret left/right/turn left/turn right
+# 5. Resolve U: Identify and interpret all verbs
+
+
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
 max_len = 9
 placeholder = '<empty>'

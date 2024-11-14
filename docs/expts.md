@@ -60,6 +60,8 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
 
     Here the computation corresponding to resolving repetitions can in theory happen after the decoder has generated the actions for 'jump'. In that case the intervention needs to be after that generation time step.
 
+    - If we are only interested in top down or bottom up parses, what does that mean for interventions at different time steps?
+
 - Does the "leaking" of the computation into other layers have a greater impact on alignment in case of decoders? This might be true because if there is a leak across time steps then that might imply that the leak across layers or components gets compounded. 
 
 - Can circuit discovery effectively deal with the leaking problem?
