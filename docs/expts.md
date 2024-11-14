@@ -52,7 +52,7 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
 - When the network is an encoder, the computation is a single forward pass through the model at t = 0. If the intervention occurs at a component at layer i, it only influences computation at layer j > i. Here we need to assume that the computation we are interested in is localized in the intervened network component. In reality this assumption might not be true and the computation might be distributed in other components in the same or adjacent layers (Aside: Does the type of positional embedding have an impact on this?). The hypothesis is that the more the computation "leaks out" of the intervened component, the worse the alignment will be.  
 
 #### Decoder : 
-- In case when the network is an autoregressive decoder, the network has to generate one token per time step, after the intervention on the initial input or prompt at layer i. Therefore the computation can not only leak into other components or layers, but also across time steps. Also if the computation occurs at t = t1 > 0, then intervention at t = 0 will not lead to any alignment. To search for this, for a given causal variable we could generate (input, counterfactual input) pairs where the computation corresponding to the causal variable can realistically occur at t > 0. For example : 
+- In case when the network is an autoregressive decoder, it has to generate one token per time step, after the intervention on the initial input or prompt at layer i. Therefore the computation can not only leak into other components or layers, but also across time steps. Also if the computation occurs at t = t1 > 0, then intervention at t = 0 will not lead to any alignment. To search for this, for a given causal variable we could generate (input, counterfactual input) pairs where the computation corresponding to the causal variable can realistically occur at t > 0. For example : 
 
     `base input = turn right and jump twice`
 
@@ -73,4 +73,4 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
 
 - Does the "leaking" of the computation into other layers have a greater impact on alignment in case of decoders? This might be true because if there is a leak across time steps then that might imply that the leak across layers or components gets compounded. 
 
-- Can circuit discovery effectively deal with this "leaking"?
+- Can circuit discovery effectively deal with this "leaking" by pruning the search space enough such that the alignment values are still useful to draw conclusions?
