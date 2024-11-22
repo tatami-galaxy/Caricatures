@@ -46,8 +46,6 @@ If the model has really been able to understand the compositional abstraction of
 
 ### Intervention experiments :
 
-**should we ignore verb = turn?**
-
 Intervention experiments aim to test aligment between the causal or algorithmic solution and the network being analyzed. This is done using pairs or inputs and counterfactual inputs. To test if a network component is a causal abstraction of a casual variable, that is if they are aligned, the variable and network component values are replaced with their counterfactual values, all else being kept unchanged. For perfect alignment, the two interventions should always produce identical results. 
 
 #### Encoder : 
@@ -69,13 +67,19 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
     Can we do this systematically for all the variables we are interested in for both top-down and bottom-up parses? Given a variable/computation can we algorithmically generate the potential time steps this computation, or a part of it, can occur? The constraints are auto-regression and the fixed ordering of top-down and bottom-up parses. 
 
     ##### Bottom-Up :
-    - For bottom-up parse `and\after` resolution is the last computation. Therefore all other computations must happen at `t = 0`.
+    - For bottom-up parse `and\after` resolution is the last computation. Therefore all other computations must happen at `t = 0`. **We only compute loss for generation, not for context.** This is because we are not modeling how the context (command) output should change given an intervention on the context. Our causal model only predicts how the output actions change with an intervention. Since we need to compute a language modeling loss we use the expected output actions after the intervention to get a cross entropy loss. **Can we use PPO or REINFORCE here to optimize a non differentiable objective between the** `generated actions after intervention` **and the** `expected generated actions after intervention`**?**
+    * `base_inputs` = `base_command` + `expected generated actions after intervention`
+    * `source_inputs` = `source_command` + `expected generated actions after intervention`
+    * `labels` = `expected generated actions after intervention`
 
     ##### Top-Down : 
-    - `and\after` resolution is the first computation which much happen at `t = 0`. What other time steps do we search for the other computations? The last computation is `verb` resolution. In the output actions, **if we ignore the turn verb** (does it matter?), the first verb is at most the `3rd action`. Therefore if the model indeed implements the top-down parse then all the resolutions should be done before emitting the `3rd action` where the exact value of `t` depends on the tokenizer. **How to do an intervention at `t > 0`?**
+    - `and\after` resolution is the first computation which much happen at `t = 0`. What other time steps do we search for the other computations? The last computation is `verb` resolution. In the output actions, if we ignore the turn verb (since turn as a verb is not explicitly represented), the first verb is at most the `3rd action` (ex : jump opposite). Therefore if the model indeed implements the top-down parse then all the resolutions should be done before emitting the `3rd action` where the exact value of `t` depends on the tokenizer. Let's say we want to intervene at `t = n`. **We need to make sure that the action output for** `0 < t < n` **is identical even after the intervention.** Otherwise during intervention we need to "correct" the internal representations computed for `0 < t < n`.  
+    * `base_inputs` = `base_command` + `expected generated actions after intervention`
+    * `source_inputs` = `source_command` + `expected generated actions after intervention`
+    * `labels` = `expected generated actions after intervention for t >= n`
 
 
-    If there is no alignment with both top-down or bottom-up parses can we claim that the model learns an algorithm which is not strictly compositional? Can we force the model to learn either the top-down or the bottom-up parse perhaps with IIT? Does that help in for example lenght generalization?  
+    If there is no alignment with both top-down or bottom-up parses can we claim that the model learns an algorithm which is not strictly compositional? Can we force the model to learn either the top-down or the bottom-up parse perhaps with IIT? Does that help in for example length generalization? Does RASP help?
 
 
     ##### Steps:
@@ -85,11 +89,9 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
     - Identify variables to align
     - Select network component to align
     - Select timesteps
-        - How?
     - Generate (input, counterfactual input) pairs
     - Train boundless DAS
     - Validate
-        - RASP, etc.
 
 - Does the "leaking" of the computation into other layers have a greater impact on alignment in case of decoders? This might be true because if there is a leak across time steps then that might imply that the leak across layers or components gets compounded. 
 
