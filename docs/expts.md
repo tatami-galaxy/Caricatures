@@ -67,7 +67,7 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
     Can we do this systematically for all the variables we are interested in for both top-down and bottom-up parses? Given a variable/computation can we algorithmically generate the potential time steps this computation, or a part of it, can occur? The constraints are auto-regression and the fixed ordering of top-down and bottom-up parses. 
 
     ##### Bottom-Up :
-    - For bottom-up parse `and\after` resolution is the last computation. Therefore all other computations must happen at `t = 0`. **We only compute loss for generation, not for context.** This is because we are not modeling how the context (command) output should change given an intervention on the context. Our causal model only predicts how the output actions change with an intervention. Since we need to compute a language modeling loss we use the expected output actions after the intervention to get a cross entropy loss. **Can we use PPO or REINFORCE here to optimize a non differentiable objective between the** `generated actions after intervention` **and the** `expected generated actions after intervention`**?**
+    - For bottom-up parse `and\after` resolution is the last computation. Therefore all other computations must happen at `t = 0`. **We only compute loss for generation, not for context.** This is because we are not modeling how the context (command) output should change given an intervention on the context. Our causal model only predicts how the output actions change with an intervention. Since we need to compute a language modeling loss we use the expected output actions after the intervention to get a cross entropy loss. Can we use PPO or REINFORCE here to optimize a non differentiable objective between the `generated actions after intervention` and the `expected generated actions after intervention`?
     * `base_inputs` = `base_command` + `expected generated actions after intervention`
     * `source_inputs` = `source_command` + `expected generated actions after intervention`
     * `labels` = `expected generated actions after intervention`
@@ -78,8 +78,15 @@ Intervention experiments aim to test aligment between the causal or algorithmic 
     * `source_inputs` = `source_command` + `expected generated actions after intervention`
     * `labels` = `expected generated actions after intervention for t >= n`
 
-
     If there is no alignment with both top-down or bottom-up parses can we claim that the model learns an algorithm which is not strictly compositional? Can we force the model to learn either the top-down or the bottom-up parse perhaps with IIT? Does that help in for example length generalization? Does RASP help?
+
+    ##### Causal Model
+    The causal model starts its computation at the leaves, goes up the tree computing each node and produces the final output at the root. When the network is an encoder, the causal model and the computation graph can be quite similar. The network also computes representations bottom up from the lowest layer to produce the final layer embeddings. The output will be in this final layer, perhaps trained to be in a special token such as the CLS token.
+
+    When model is a decoder however, the final output is not produced after a single forward pass. Its generated one token at a time with each forward pass through the model. Therefore the final layer at `t = 0` or at `t << N` will not contain the final output representation. 
+
+    ##### and/after resolution
+    How to represent this in a node in case of the top-down parse?
 
 
     ##### Steps:
