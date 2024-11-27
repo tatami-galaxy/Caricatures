@@ -57,81 +57,8 @@ def causal_model(command):
     # Step 0: Split the command into lexical items (words)
     l0 = command.split()
     
-    # STEP 1. Resolve C: Split based on conj
-    conj = l0[4]
-    if conj == 'and':
-        # maintain order of command
-        l11 = l0[:4] 
-        l12 = l0[5:]
-        # merge
-        l1 = [l11, l12]
-    elif conj == 'after':
-        # reverse order of command
-        l11 = l0[5:]
-        l12 = l0[:4] 
-        # merge
-        l1 = [l11, l12]
-    else:
-        l1 = [l0[:4]]
-
-
-    # STEP 2. Resolve S: Interpret twice/thrice for repetition as individual elements
-    l2 = []
-    for l in l1:
-        # find nums and resolve
-        num = l[-1]
-        l_copy = [l[:-1]]*nums[num]
-        l2.append(l_copy)
-
-
-    # STEP 3: Resolve V: Interpret opposite/around and handle direction repeats
-    l3 = []
-    for l in l2:
-        new_l = []
-        # has nested lists
-        for nl in l:
-            # resolve around/opposite
-            item = copy.copy(nl)
-            ar_opp = nl[1]
-            resl = around_opposite[ar_opp]
-            item[1] = resl
-            new_l.append(item)
-        l3.append(new_l)
-
-
-    # STEP 4: Resolve D: Identify and interpret directions
-    l4 = []
-    for l in l3:
-        new_l = []
-        # has nested lists
-        for nl in l:
-            item = copy.copy(nl)
-            # get direction
-            dir = nl[-1]
-            # replace direction in around/opposite
-            item[1] = [directions[dir] if i == 'direction' else i for i in nl[1]]
-            del item[-1]
-            new_l.append(item)
-        l4.append(new_l)
-            
-
-    # STEP 5: Resolve U: Identify and replace all verbs
-    l5 = []
-    for l in l4:
-        new_l = []
-        # has nested lists
-        for nl in l:
-            item = copy.copy(nl)
-            # get verb
-            verb = nl[0]
-            # replace direction in around/opposite
-            item[1] = [verbs[verb] if i == 'action' else i for i in nl[1]]
-            # only one term left
-            del item[0]
-            # remove unnecessary nesting
-            item = item[0]
-            new_l.append(item)
-        l5.append(new_l)
+    # STEP 1. Resolve U: Iidentify and interpret all verbs.
+    
 
 
     # Remove placeholders

@@ -56,6 +56,8 @@ def causal_model(command):
 
     # Step 0: Split the command into lexical items (words)
     l0 = command.split()
+
+    print(l0)
     
     # STEP 1. Resolve C: Split based on conj
     conj = l0[4]
@@ -74,6 +76,8 @@ def causal_model(command):
     else:
         l1 = [l0[:4]]
 
+    print(l1)
+
 
     # STEP 2. Resolve S: Interpret twice/thrice for repetition as individual elements
     l2 = []
@@ -82,6 +86,9 @@ def causal_model(command):
         num = l[-1]
         l_copy = [l[:-1]]*nums[num]
         l2.append(l_copy)
+
+
+    print(l2)
 
 
     # STEP 3: Resolve V: Interpret opposite/around and handle direction repeats
@@ -99,6 +106,9 @@ def causal_model(command):
         l3.append(new_l)
 
 
+    print(l3)
+
+
     # STEP 4: Resolve D: Identify and interpret directions
     l4 = []
     for l in l3:
@@ -113,6 +123,9 @@ def causal_model(command):
             del item[-1]
             new_l.append(item)
         l4.append(new_l)
+
+
+    print(l4)
             
 
     # STEP 5: Resolve U: Identify and replace all verbs
@@ -132,6 +145,8 @@ def causal_model(command):
             item = item[0]
             new_l.append(item)
         l5.append(new_l)
+
+    print(l5)
 
 
     # Remove placeholders
@@ -172,13 +187,13 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    #command = 'look around right twice and turn opposite left twice'
+    command = 'look around right twice and turn opposite left twice'
     #command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
     #command = 'run opposite left <empty> after walk <empty> right <empty>'
     #command = 'turn around right twice after run around right thrice'
     #command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
-    #print(causal_model(command))
-    #quit()
+    causal_model(command)
+    quit()
 
     ## testing end ##
 
