@@ -3,6 +3,8 @@
 
 ### Causal model for SCAN : 
 
+Removed examples with 'turn' used as a verb to the simply causal model
+
 Each example in the SCAN dataset is aimed at converting a natural language command to a sequence of actions. 
 
 $ InputCommand \longrightarrow OutputSequence$

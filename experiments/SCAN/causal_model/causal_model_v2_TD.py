@@ -14,8 +14,8 @@ from datasets import load_dataset
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
 max_len = 9
 placeholder = '<empty>'
+# there will always be a verb
 verbs = {
-    'turn': placeholder,
     'jump': 'I_JUMP',
     'look': 'I_LOOK',
     'walk': 'I_WALK',
@@ -36,7 +36,7 @@ nums = {
     'thrice': 3,
     placeholder: 1,
 }
-conjs = ['and', 'after']
+conjs = ['and', 'after', placeholder]
 
 # command structure
 command_structure = {
@@ -56,8 +56,6 @@ def causal_model(command):
 
     # Step 0: Split the command into lexical items (words)
     l0 = command.split()
-
-    print(l0)
     
     # STEP 1. Resolve C: Split based on conj
     conj = l0[4]
@@ -76,20 +74,14 @@ def causal_model(command):
     else:
         l1 = [l0[:4]]
 
-    print(l1)
-
-
     # STEP 2. Resolve S: Interpret twice/thrice for repetition as individual elements
     l2 = []
     for l in l1:
         # find nums and resolve
+        # num is at the end, repeat entire sequence as many times, nest
         num = l[-1]
         l_copy = [l[:-1]]*nums[num]
         l2.append(l_copy)
-
-
-    print(l2)
-
 
     # STEP 3: Resolve V: Interpret opposite/around and handle direction repeats
     l3 = []
@@ -99,15 +91,12 @@ def causal_model(command):
         for nl in l:
             # resolve around/opposite
             item = copy.copy(nl)
+            # around/opposite is the second element (or placeholder)
             ar_opp = nl[1]
             resl = around_opposite[ar_opp]
             item[1] = resl
             new_l.append(item)
         l3.append(new_l)
-
-
-    print(l3)
-
 
     # STEP 4: Resolve D: Identify and interpret directions
     l4 = []
@@ -116,17 +105,13 @@ def causal_model(command):
         # has nested lists
         for nl in l:
             item = copy.copy(nl)
-            # get direction
+            # get direction (last element)
             dir = nl[-1]
             # replace direction in around/opposite
             item[1] = [directions[dir] if i == 'direction' else i for i in nl[1]]
             del item[-1]
             new_l.append(item)
         l4.append(new_l)
-
-
-    print(l4)
-            
 
     # STEP 5: Resolve U: Identify and replace all verbs
     l5 = []
@@ -145,9 +130,6 @@ def causal_model(command):
             item = item[0]
             new_l.append(item)
         l5.append(new_l)
-
-    print(l5)
-
 
     # Remove placeholders
     l6 = []
@@ -187,13 +169,11 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    command = 'look around right twice and turn opposite left twice'
+    #command = 'look around right twice and turn opposite left twice'
     #command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
     #command = 'run opposite left <empty> after walk <empty> right <empty>'
     #command = 'turn around right twice after run around right thrice'
     #command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
-    causal_model(command)
-    quit()
 
     ## testing end ##
 
@@ -206,13 +186,20 @@ if __name__ == '__main__':
     length_test = scan_length['test']
 
     data_splits = [simple_train, simple_test, length_train, length_test]
-    total_len = sum([len(s) for s in data_splits])
+    datasets = []
+    # filter out turns
+    for dataset in data_splits:
+        dataset = dataset.filter(lambda x: 'turn' not in x["commands"].split())
+        datasets.append(dataset)
+    total_len = sum([len(d) for d in datasets])
 
     accuracy = 0
     bar = tqdm(range(total_len))
-    for dataset in data_splits:
+    for dataset in datasets:
         column_names = dataset.column_names
         input_column = column_names[0]
+
+        # pad with placeholder
         dataset = dataset.map(
             add_empty_token,
             batched=False,

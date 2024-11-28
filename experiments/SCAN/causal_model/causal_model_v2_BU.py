@@ -15,7 +15,6 @@ from datasets import load_dataset
 max_len = 9
 placeholder = '<empty>'
 verbs = {
-    'turn': placeholder,
     'jump': 'I_JUMP',
     'look': 'I_LOOK',
     'walk': 'I_WALK',
@@ -36,7 +35,7 @@ nums = {
     'thrice': 3,
     placeholder: 1,
 }
-conjs = ['and', 'after']
+conjs = ['and', 'after', placeholder]
 
 # command structure
 command_structure = {
@@ -45,10 +44,10 @@ command_structure = {
     2: directions,
     3: nums,
     4: conjs,
-    5: verbs, # 0
-    6: around_opposite, # 1
-    7: directions, # 2
-    8: nums, # 3
+    5: verbs,  # 0
+    6: around_opposite,  # 1
+    7: directions,  # 2
+    8: nums,  # 3
 }
 
 
@@ -58,8 +57,11 @@ def causal_model(command):
     l0 = command.split()
     
     # STEP 1. Resolve U: Iidentify and interpret all verbs.
-    
+    # resolve verbs
+    l1 =  [verbs[l] if l in verbs else l for l in l0]
 
+    # STEP 2. Resolve D: Identify and interpret left/right/turn left/turn right
+    # TODO
 
     # Remove placeholders
     l6 = []
@@ -99,13 +101,14 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    #command = 'look around right twice and turn opposite left twice'
-    #command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
-    #command = 'run opposite left <empty> after walk <empty> right <empty>'
-    #command = 'turn around right twice after run around right thrice'
-    #command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
-    #print(causal_model(command))
-    #quit()
+    command = 'look around right twice and jump opposite left twice'
+    # command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
+    # command = 'run opposite left <empty> after walk <empty> right <empty>'
+    # command = 'turn around right twice after run around right thrice'
+    # command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
+
+    causal_model(command)
+    quit()
 
     ## testing end ##
 
@@ -116,19 +119,26 @@ if __name__ == '__main__':
     simple_test = scan_simple['test']
     length_train = scan_length['train']
     length_test = scan_length['test']
-
     data_splits = [simple_train, simple_test, length_train, length_test]
-    total_len = sum([len(s) for s in data_splits])
+
+    # filter out turns
+    datasets = []
+    for dataset in data_splits:
+        dataset = dataset.filter(lambda x: 'turn' not in x["commands"].split())
+        datasets.append(dataset)
+    total_len = sum([len(d) for d in datasets])
 
     accuracy = 0
     bar = tqdm(range(total_len))
-    for dataset in data_splits:
+    for dataset in datasets:
         column_names = dataset.column_names
         input_column = column_names[0]
+
+        # pad with placeholder
         dataset = dataset.map(
             add_empty_token,
             batched=False,
-            #desc="Running tokenizer on dataset",
+            # desc="Running tokenizer on dataset",
         )
         for example in dataset:
             output = causal_model(example['commands'])
