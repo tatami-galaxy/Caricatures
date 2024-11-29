@@ -76,16 +76,21 @@ def causal_model(command):
     l3 = [i for j, i in enumerate(l3) if j not in del_indices]
 
     # STEP 4. Resolve S: Identify and interpret twice/thrice
-    # TODO
+    # TODO: check
     l4 = copy.copy(l3)
     # find nums
     num_indices = [i for i in range(len(l3)) if not isinstance(l3[i], list) and l3[i] in nums]
-    # repeat element to its left
-    #for n in reversed(num_indices):
-        # repeat element to its left
+    # repeat elements to its left or list to its left
+    for n in reversed(num_indices):
+        num = l3[n]
+        if not isinstance(l3[n-1], list):
+            l4[n] = [l3[n-2:n]]*nums[num]
+            del l4[n-2:n]
+        else:
+            l4[n] = [l3[n-1]]*nums[num]
 
-    print(l4)
-    quit()
+    # STEP 5. Resolve C: Identify and interpret and/after
+    # TODO:
 
     # Remove placeholders
     l6 = []
