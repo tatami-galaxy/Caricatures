@@ -8,7 +8,7 @@ from datasets import load_dataset
 # 2. Resolve D: Identify and interpret left/right/turn left/turn right
 # 3. Resolve V: Identify and interpret opposite/around
 # 4. Resolve S: Identify and interpret twice/thrice
-# 5. Resolve C: Identify and interpret and /after.
+# 5. Resolve C: Identify and interpret and/after.
 
 
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
@@ -23,17 +23,14 @@ verbs = {
 directions = {
     'left': 'I_TURN_LEFT',
     'right': 'I_TURN_RIGHT',
-    placeholder: placeholder
 }
 around_opposite = {
     'around': ['direction', 'action']*4,
     'opposite': ['direction', 'direction', 'action'],
-    placeholder: ['direction', 'action']
 }
 nums = {
     'twice': 2,
     'thrice': 3,
-    placeholder: 1,
 }
 conjs = ['and', 'after', placeholder]
 
@@ -61,7 +58,34 @@ def causal_model(command):
     l1 =  [verbs[l] if l in verbs else l for l in l0]
 
     # STEP 2. Resolve D: Identify and interpret left/right/turn left/turn right
+    l2 = [directions[l] if l in directions else l for l in l1]
+
+    # STEP 3. Resolve V: Identify and interpret opposite/around
+    l3 = [around_opposite[l] if l in around_opposite else l for l in l2]
+    # opposite/around are lists
+    oa_indices = [i for i in range(len(l3)) if isinstance(l3[i], list)]
+    for oa_index in oa_indices:
+        verb = l3[oa_index-1]
+        direction = l3[oa_index+1]
+        l3[oa_index] = [direction if i == 'direction' else verb for i in l3[oa_index]]
+    # subsume turns and verbs
+    del_indices = []
+    for oa_index in reversed(oa_indices):
+        del_indices.append(oa_index-1)
+        del_indices.append(oa_index+1)
+    l3 = [i for j, i in enumerate(l3) if j not in del_indices]
+
+    # STEP 4. Resolve S: Identify and interpret twice/thrice
     # TODO
+    l4 = copy.copy(l3)
+    # find nums
+    num_indices = [i for i in range(len(l3)) if not isinstance(l3[i], list) and l3[i] in nums]
+    # repeat element to its left
+    #for n in reversed(num_indices):
+        # repeat element to its left
+
+    print(l4)
+    quit()
 
     # Remove placeholders
     l6 = []
@@ -101,9 +125,10 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    command = 'look around right twice and jump opposite left twice'
+    command = 'look around right twice and jump opposite left thrice'
+    #command = 'look <empty> twice and jump opposite left twice'
     # command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
-    # command = 'run opposite left <empty> after walk <empty> right <empty>'
+    #command = 'run opposite left <empty> after walk <empty> right <empty>'
     # command = 'turn around right twice after run around right thrice'
     # command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
 

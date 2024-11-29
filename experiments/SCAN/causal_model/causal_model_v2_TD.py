@@ -51,7 +51,7 @@ command_structure = {
     8: nums, # 3
 }
 
-
+# TODO: check if each step follows PSG
 def causal_model(command):
 
     # Step 0: Split the command into lexical items (words)
