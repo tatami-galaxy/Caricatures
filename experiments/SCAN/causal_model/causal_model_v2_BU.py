@@ -1,5 +1,6 @@
 import copy
 from tqdm.auto import tqdm
+from itertools import chain
 from datasets import load_dataset
 
 # Bottom Up CAM 
@@ -32,7 +33,7 @@ nums = {
     'twice': 2,
     'thrice': 3,
 }
-conjs = ['and', 'after', placeholder]
+conjs = ['and', 'after']
 
 # command structure
 command_structure = {
@@ -48,6 +49,16 @@ command_structure = {
 }
 
 
+# https://stackoverflow.com/questions/10823877/what-is-the-fastest-way-to-flatten-arbitrarily-nested-lists-in-python
+def flatten(container):
+    for i in container:
+        if isinstance(i, (list, tuple)):
+            for j in flatten(i):
+                yield j
+        else:
+            yield i
+
+
 def causal_model(command):
 
     # Step 0: Split the command into lexical items (words)
@@ -61,48 +72,61 @@ def causal_model(command):
     l2 = [directions[l] if l in directions else l for l in l1]
 
     # STEP 3. Resolve V: Identify and interpret opposite/around
-    l3 = [around_opposite[l] if l in around_opposite else l for l in l2]
+    oa_indices = [1, 6]
+    #l3 = [around_opposite[l] if l in around_opposite else l for l in l2]
     # opposite/around are lists
-    oa_indices = [i for i in range(len(l3)) if isinstance(l3[i], list)]
     for oa_index in oa_indices:
-        verb = l3[oa_index-1]
-        direction = l3[oa_index+1]
-        l3[oa_index] = [direction if i == 'direction' else verb for i in l3[oa_index]]
+        verb = l2[oa_index-1]
+        direction = l2[oa_index+1]
+        if l2[oa_index] == placeholder:
+            l2[oa_index] = [direction, verb]
+        else:
+            l2[oa_index] = around_opposite[l2[oa_index]]
+            l2[oa_index] = [direction if i == 'direction' else verb for i in l2[oa_index]]
+
     # subsume turns and verbs
     del_indices = []
     for oa_index in reversed(oa_indices):
         del_indices.append(oa_index-1)
         del_indices.append(oa_index+1)
-    l3 = [i for j, i in enumerate(l3) if j not in del_indices]
+    l3 = [i for j, i in enumerate(l2) if j not in del_indices]
 
     # STEP 4. Resolve S: Identify and interpret twice/thrice
-    # TODO: check
     l4 = copy.copy(l3)
     # find nums
     num_indices = [i for i in range(len(l3)) if not isinstance(l3[i], list) and l3[i] in nums]
     # repeat elements to its left or list to its left
     for n in reversed(num_indices):
         num = l3[n]
-        if not isinstance(l3[n-1], list):
-            l4[n] = [l3[n-2:n]]*nums[num]
-            del l4[n-2:n]
-        else:
-            l4[n] = [l3[n-1]]*nums[num]
+        #if not isinstance(l3[n-1], list):
+            #l4[n] = [l3[n-2:n]]*nums[num]
+            #del l4[n-2:n]
+        #else:
+        l4[n] = [l3[n-1]]*nums[num]
+        del l4[n-1]
 
     # STEP 5. Resolve C: Identify and interpret and/after
-    # TODO:
+    l5 = []
+    # find and/after
+    conj_index = [i for i in range(len(l4)) if not isinstance(l4[i], list) and l4[i] in conjs]
+    if len(conj_index) > 0:
+        conj = l4[conj_index[0]]
+        conj_index = conj_index[0]
+    else:
+        conj = placeholder
+    if conj == 'after':
+        l5.extend(l4[conj_index+1:])
+        l5.extend(l4[:conj_index])
+    elif conj == 'and':
+        l5.extend(l4[:conj_index])
+        l5.extend(l4[conj_index+1:])
+    else:
+        l5 = copy.copy(l4)
 
-    # Remove placeholders
-    l6 = []
-    for l in l5:
-        if len(l) == 0: continue
-        for nl in l:
-            item = placeholder.join(nl)
-            l6.append(item)
-    action = placeholder.join(l6)
-    action = action.split(placeholder)
-    action = [a for a in action if a != '']
-    action = ' '.join(action)
+    # Flatten and remove placeholders
+    l6 = list(flatten(l5))
+    l6 = [l for l in l6 if l != placeholder]
+    action = ' '.join(l6)
 
     return action
 
@@ -130,15 +154,15 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    command = 'look around right twice and jump opposite left thrice'
-    #command = 'look <empty> twice and jump opposite left twice'
-    # command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
+    #command = 'look around right twice and jump opposite left thrice'
+    #command = 'look <empty> <empty> twice and jump opposite left <empty>'
     #command = 'run opposite left <empty> after walk <empty> right <empty>'
-    # command = 'turn around right twice after run around right thrice'
-    # command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
+    #command = 'look <empty> <empty> twice <empty> <empty> <empty> <empty> <empty>'
+    #command = 'walk <empty> <empty> <empty> after run around right twice'
+    #command = 'walk opposite left twice and walk opposite right thrice'
 
-    causal_model(command)
-    quit()
+    #print(causal_model(command))
+    #quit()
 
     ## testing end ##
 
