@@ -5,7 +5,7 @@ from datasets import load_dataset
 
 # Bottom Up CAM 
 
-# 1. Resolve U: Split sentence into lexical items, identify and interpret all verbs.
+# 1. Resolve U: Identify and interpret all verbs.
 # 2. Resolve D: Identify and interpret left/right/turn left/turn right
 # 3. Resolve V: Identify and interpret opposite/around
 # 4. Resolve S: Identify and interpret twice/thrice

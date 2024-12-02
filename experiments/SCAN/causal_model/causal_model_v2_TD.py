@@ -51,7 +51,17 @@ command_structure = {
     8: nums, # 3
 }
 
-# TODO: check if each step follows PSG
+
+# https://stackoverflow.com/questions/10823877/what-is-the-fastest-way-to-flatten-arbitrarily-nested-lists-in-python
+def flatten(container):
+    for i in container:
+        if isinstance(i, (list, tuple)):
+            for j in flatten(i):
+                yield j
+        else:
+            yield i
+
+
 def causal_model(command):
 
     # Step 0: Split the command into lexical items (words)
@@ -131,17 +141,10 @@ def causal_model(command):
             new_l.append(item)
         l5.append(new_l)
 
-    # Remove placeholders
-    l6 = []
-    for l in l5:
-        if len(l) == 0: continue
-        for nl in l:
-            item = placeholder.join(nl)
-            l6.append(item)
-    action = placeholder.join(l6)
-    action = action.split(placeholder)
-    action = [a for a in action if a != '']
-    action = ' '.join(action)
+    # Flatten and remove placeholders
+    l6 = list(flatten(l5))
+    l6 = [l for l in l6 if l != placeholder]
+    action = ' '.join(l6)
 
     return action
 
@@ -169,11 +172,14 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    #command = 'look around right twice and turn opposite left twice'
-    #command = 'turn <empty> left twice and jump <empty> <empty> <empty>'
+    #command = 'look around right twice and walk opposite left twice'
+    #command = 'look <empty> left twice and jump <empty> <empty> <empty>'
     #command = 'run opposite left <empty> after walk <empty> right <empty>'
     #command = 'turn around right twice after run around right thrice'
     #command = 'walk opposite left <empty> <empty> <empty> <empty> <empty> <empty>'
+
+    #print(causal_model(command))
+    #quit()
 
     ## testing end ##
 
