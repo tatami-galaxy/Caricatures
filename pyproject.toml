@@ -1,0 +1,15 @@
+[project]
+name = "caricatures"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=3.2.0",
+    "evaluate>=0.4.3",
+    "tensorboard>=2.18.0",
+    "torch>=2.5.1",
+    "torchvision>=0.20.1",
+    "transformers>=4.47.1",
+    "wandb>=0.19.1",
+]

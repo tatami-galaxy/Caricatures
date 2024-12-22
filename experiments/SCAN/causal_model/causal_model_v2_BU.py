@@ -68,8 +68,12 @@ def causal_model(command):
     # resolve verbs
     l1 =  [verbs[l] if l in verbs else l for l in l0]
 
+    print(l1)
+
     # STEP 2. Resolve D: Identify and interpret left/right/turn left/turn right
     l2 = [directions[l] if l in directions else l for l in l1]
+
+    print(l2)
 
     # STEP 3. Resolve V: Identify and interpret opposite/around
     oa_indices = [1, 6]
@@ -84,12 +88,16 @@ def causal_model(command):
             l2[oa_index] = around_opposite[l2[oa_index]]
             l2[oa_index] = [direction if i == 'direction' else verb for i in l2[oa_index]]
 
+    print(l2)
+
     # subsume turns and verbs
     del_indices = []
     for oa_index in reversed(oa_indices):
         del_indices.append(oa_index-1)
         del_indices.append(oa_index+1)
     l3 = [i for j, i in enumerate(l2) if j not in del_indices]
+
+    print(l3)
 
     # STEP 4. Resolve S: Identify and interpret twice/thrice
     l4 = copy.copy(l3)
@@ -104,6 +112,8 @@ def causal_model(command):
         #else:
         l4[n] = [l3[n-1]]*nums[num]
         del l4[n-1]
+
+    print(l4)
 
     # STEP 5. Resolve C: Identify and interpret and/after
     l5 = []
@@ -122,6 +132,9 @@ def causal_model(command):
         l5.extend(l4[conj_index+1:])
     else:
         l5 = copy.copy(l4)
+
+    print(l5)
+    quit()
 
     # Flatten and remove placeholders
     l6 = list(flatten(l5))
@@ -154,15 +167,15 @@ if __name__ == '__main__':
 
     ## testing ##
 
-    #command = 'look around right twice and jump opposite left thrice'
+    command = 'look around right twice and jump opposite left thrice'
     #command = 'look <empty> <empty> twice and jump opposite left <empty>'
     #command = 'run opposite left <empty> after walk <empty> right <empty>'
     #command = 'look <empty> <empty> twice <empty> <empty> <empty> <empty> <empty>'
     #command = 'walk <empty> <empty> <empty> after run around right twice'
     #command = 'walk opposite left twice and walk opposite right thrice'
 
-    #print(causal_model(command))
-    #quit()
+    print(causal_model(command))
+    quit()
 
     ## testing end ##
 
