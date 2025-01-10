@@ -63,12 +63,43 @@ variables = leaves + non_leaves
 # TODO:
 ### FUNCTIONS ###
 
-# TODO: what arguments?
-def verb_resolution():
-    pass
+def verb_resolution(verb1, verb2):
+    verb1 = verbs[verb1] if verb1 in verbs else verb1
+    verb2 = verbs[verb2] if verb2 in verbs else verb2
+    return [verb1, verb2]
 
-def direction_resolution():
-    pass
+def direction_resolution(dir1, dir2):
+    dir1 = directions[dir1] if dir1 in directions else dir1
+    dir2 = directions[dir2] if dir2 in directions else dir2
+    return [dir1, dir2]
+
+def around_opposite_resolution(verb_res, ar_op1, ar_op2, dir_res):
+    # reformat
+    # 'I_LOOK', 'around', 'I_TURN_RIGHT', 'twice', 'and', 'I_JUMP', 'opposite', 'I_TURN_LEFT', 'thrice'
+    items = [[verb_res[0], ar_op1, dir_res[0]], [verb_res[1], ar_op2, dir_res[1]]]
+    for item in items:
+
+        ##
+        oa_indices = [1, 6]
+        #l3 = [around_opposite[l] if l in around_opposite else l for l in l2]
+        # opposite/around are lists
+        for oa_index in oa_indices:
+            verb = l2[oa_index-1]
+            direction = l2[oa_index+1]
+            if l2[oa_index] == placeholder:
+                l2[oa_index] = [direction, verb]
+            else:
+                l2[oa_index] = around_opposite[l2[oa_index]]
+                l2[oa_index] = [direction if i == 'direction' else verb for i in l2[oa_index]]
+        # subsume turns and verbs
+        del_indices = []
+        for oa_index in reversed(oa_indices):
+            del_indices.append(oa_index-1)
+            del_indices.append(oa_index+1)
+        l3 = [i for j, i in enumerate(l2) if j not in del_indices]
+        ##
+
+
 
 def arr_opp_resolution():
     pass
