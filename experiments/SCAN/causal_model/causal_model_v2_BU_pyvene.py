@@ -60,7 +60,7 @@ non_leaves = ["verb_res", "dir_res", "ar_op_res", "num_res", "conj_res"]
 variables = leaves + non_leaves
 
 
-# TODO:
+# TODO: verify
 ### FUNCTIONS ###
 
 def verb_resolution(verb1, verb2):
@@ -75,40 +75,38 @@ def direction_resolution(dir1, dir2):
 
 def around_opposite_resolution(verb_res, ar_op1, ar_op2, dir_res):
     # reformat
-    # 'I_LOOK', 'around', 'I_TURN_RIGHT', 'twice', 'and', 'I_JUMP', 'opposite', 'I_TURN_LEFT', 'thrice'
     items = [[verb_res[0], ar_op1, dir_res[0]], [verb_res[1], ar_op2, dir_res[1]]]
+    res_items = []
     for item in items:
+        # get verb, ar_op, direction
+        verb = item[0]
+        direction = item[2]
+        ar_op = item[1]
+        # resolve
+        if ar_op == placeholder:
+            res_items.append([direction, verb])
+        else:
+            res_item = around_opposite[ar_op]
+            res_items.append([direction if i == 'direction' else verb for i in res_item])
+    return res_items
 
-        ##
-        oa_indices = [1, 6]
-        #l3 = [around_opposite[l] if l in around_opposite else l for l in l2]
-        # opposite/around are lists
-        for oa_index in oa_indices:
-            verb = l2[oa_index-1]
-            direction = l2[oa_index+1]
-            if l2[oa_index] == placeholder:
-                l2[oa_index] = [direction, verb]
-            else:
-                l2[oa_index] = around_opposite[l2[oa_index]]
-                l2[oa_index] = [direction if i == 'direction' else verb for i in l2[oa_index]]
-        # subsume turns and verbs
-        del_indices = []
-        for oa_index in reversed(oa_indices):
-            del_indices.append(oa_index-1)
-            del_indices.append(oa_index+1)
-        l3 = [i for j, i in enumerate(l2) if j not in del_indices]
-        ##
+def resolve_num(ar_op_res, num1, num2):
+    res_items = []
+    # resolve num1
+    if num1 != placeholder: res_items.append(ar_op_res[0]*nums[num])
+    else: res_items.append(ar_op_res[0])
+    # resolve num2
+    if num2 != placeholder: res_items.append(ar_op_res[1]*nums[num])
+    else: res_items.append(ar_op_res[1])
+    return res_items
 
-
-
-def arr_opp_resolution():
-    pass
-
-def resolve_num():
-    pass
-
-def conj_resolution():
-    pass
+def conj_resolution(num_res, conj):
+    if conj == 'and':
+        return num_res[0] + num_res[1]
+    elif conf == 'after':
+        return num_res[1] + num_res[0]
+    else:
+        return num_res[0]
 
 
 functions = {
@@ -131,7 +129,7 @@ functions = {
     "dir_res": direction_resolution,
 
     # resolve around/opposite
-    "ar_op_res": arr_opp_resolution,
+    "ar_op_res": around_opposite_resolution,
 
     # resolve num
     "num_res": resolve_num,
@@ -141,52 +139,24 @@ functions = {
 }
 
 
+# TODO:
 ### VALUES ###
 
 values = dict()
 
 # leaves
-values["act1"] = list(actions.keys())
-values["act2"] = list(actions.keys())
-values["trn1"] = list(turns.keys())
-values["trn2"] = list(turns.keys())
+values["verb1"] = list(verbs.keys())
+values["verb2"] = list(verbs.keys())
+values["ar_op1"] = list(around_opposite.keys())
+values["ar_op2"] = list(around_opposite.keys())
 values["dir1"] = list(directions.keys())
 values["dir2"] = list(directions.keys())
 values["num1"] = list(nums.keys())
 values["num2"] = list(nums.keys())
 values["conj"] = conjs
 
+# resolve verbs
 
-# resolve turn
-values["trn1_res"] = [resolve_turn(t) for t in values["trn1"]]
-values["trn2_res"] = values["trn1_res"].copy()
-
-# turn+dir
-all_trn_dir = list(itertools.product(values["trn1_res"], values["dir1"]))
-values["trn1_dir1"] = list(set([turn_function(tup[0], tup[1]) for tup in all_trn_dir]))
-values["trn2_dir2"] = values["trn1_dir1"].copy()
-
-# act+turn_dir
-all_act_trn_dir = list(itertools.product(values["act1"], values["trn1_dir1"]))
-values["act1_trn1_dir1"] = list(set([action_function(tup[0], tup[1]) for tup in all_act_trn_dir]))
-values["act2_trn2_dir2"] = values["act1_trn1_dir1"].copy()
-
-# resolve num
-values["num1_res"] = [resolve_num(n) for n in values["num1"]]
-values["num2_res"] = values["num1_res"].copy()
-
-# act_turn_dir+num
-all_act_trn_dir_num = list(itertools.product(values["act1_trn1_dir1"], values["num1_res"]))
-values["act1_trn1_dir1_num1"] = list(set([num_function(tup[0], tup[1]) for tup in all_act_trn_dir_num]))
-values["act2_trn2_dir2_num2"] = values["act1_trn1_dir1_num1"].copy()
-
-# conj_left
-all_conj_left = list(itertools.product(values["act1_trn1_dir1_num1"], conjs))
-values["conj_left"] = list(set([conjugation_left(tup[0], tup[1]) for tup in all_conj_left]))
-
-# conj_right
-all_conj_right = list(itertools.product(values["conj_left"], values["act2_trn2_dir2_num2"]))
-values["conj_right"] = list(set([conjugation_right(tup[0], tup[1]) for tup in all_conj_right]))
 
 
 ### PARENTS ###

@@ -106,10 +106,6 @@ def causal_model(command):
     # repeat elements to its left or list to its left
     for n in reversed(num_indices):
         num = l3[n]
-        #if not isinstance(l3[n-1], list):
-            #l4[n] = [l3[n-2:n]]*nums[num]
-            #del l4[n-2:n]
-        #else:
         l4[n] = [l3[n-1]]*nums[num]
         del l4[n-1]
 
