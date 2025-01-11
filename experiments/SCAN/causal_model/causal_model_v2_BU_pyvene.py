@@ -60,7 +60,6 @@ non_leaves = ["verb_res", "dir_res", "ar_op_res", "num_res", "conj_res"]
 variables = leaves + non_leaves
 
 
-# TODO: verify
 ### FUNCTIONS ###
 
 def verb_resolution(verb1, verb2):
@@ -102,11 +101,12 @@ def resolve_num(ar_op_res, num1, num2):
 
 def conj_resolution(num_res, conj):
     if conj == 'and':
-        return num_res[0] + num_res[1]
+        output =  num_res[0] + num_res[1]
     elif conf == 'after':
-        return num_res[1] + num_res[0]
+        output = num_res[1] + num_res[0]
     else:
-        return num_res[0]
+        output = num_res[0]
+    return output
 
 
 functions = {
@@ -116,7 +116,7 @@ functions = {
     "ar_op1": lambda x: x,
     "dir1": lambda x: x,
     "num1": lambda x: x,
-    "conj",: lambda x: x,
+    "conj": lambda x: x,
     "verb2": lambda x: x,
     "ar_op2": lambda x: x,
     "dir2": lambda x: x,
@@ -139,12 +139,11 @@ functions = {
 }
 
 
-# TODO:
-### VALUES ###
+### VALUES (output) ###
 
 values = dict()
 
-# leaves
+# leaves all values
 values["verb1"] = list(verbs.keys())
 values["verb2"] = list(verbs.keys())
 values["ar_op1"] = list(around_opposite.keys())
@@ -155,69 +154,58 @@ values["num1"] = list(nums.keys())
 values["num2"] = list(nums.keys())
 values["conj"] = conjs
 
-# resolve verbs
+# verb_res all values
+all_verbs = list(itertools.product(values["verb1"], values["verb2"]))
+# TODO: list of lists with duplicates -> how to remove duplicates. set() -> unhashable type
+all_verb_res = [verb_resolution(tup[0], tup[1]) for tup in all_verbs]
+values["verb_res"] = [verb_resolution(tup[0], tup[1]) for tup in all_verbs]
 
+# direction resolution all values
+all_dirs = list(itertools.product(values["dir1"], values["dir2"]))
+values["dir_res"] = list(set(tuple([direction_resolution(tup[0], tup[1]) for tup in all_dirs])))
+
+# around/opposite resolution all values
+all_ar_op = list(itertools.product(values["verb_res"], values["ar_op1"], values["ar_op2"], values["dir_res"]))
+values["ar_op_res"] = list(set(tuple([around_opposite_resolution(tup[0], tup[1], tup[2], tup[3]) for tup in all_ar_op])))
+
+# num resolution all values
+all_nums = list(itertools.product(values["ar_op_res"], values["num1"], values["num2"]))
+values["num_res"] = list(set(tuple([num_resolution(tup[0], tup[1], tup[2]) for tup in all_nums])))
+
+# conj resolution all values
+all_conj = list(itertools.product(values["num_res"], values["conj"]))
+values["conj_res"] = list(set(tuple([conj_resolution(tup[0], tup[1]) for tup in all_conj])))
 
 
 ### PARENTS ###
 
 parents = {v:[] for v in variables}
-# left subtree
-parents["trn1_res"] = ["trn1"]
-parents["trn1_dir1"] = ["trn1_res", "dir1"]
-parents["act1_trn1_dir1"] = ["act1", "trn1_dir1"]
-parents["num1_res"] = ["num1"]
-parents["act1_trn1_dir1_num1"] = ["act1_trn1_dir1", "num1_res"]
-# right subtree
-parents["trn2_res"] = ["trn2"]
-parents["trn2_dir2"] = ["trn2_res", "dir2"]
-parents["act2_trn2_dir2"] = ["act2", "trn2_dir2"]
-parents["num2_res"] = ["num2"]
-parents["act2_trn2_dir2_num2"] = ["act2_trn2_dir2", "num2_res"]
-# merge
-parents["conj_left"] = ["act1_trn1_dir1_num1", "conj"]
-parents["conj_right"] = ["conj_left", "act2_trn2_dir2_num2"]
+
+parents["verb_res"] = ["verb1", "verb2"]
+parents["dir_res"] = ["dir1", "dir2"]
+parents["ar_op_res"] = ["verb_res", "ar_op1", "ar_op2", "dir_res"]
+parents["num_res"] = ["ar_op_res", "num1", "num2"]
+parents["conj_res"] = ["num_res", "conj"]
 
 
 ### POSITIONS ###
 
 # a dictionary with nodes as keys and positions as values
 pos = {
-
-    # left subtree
-    "act1": (1, 0),
-    "trn1": (2, 0),
+    "verb1": (1, 0),
+    "ar_op1": (2, 0),
     "dir1": (1.9, 0.05),
     "num1": (4, 0),
     "conj": (4.11, 0.1),
-    "act1": (0.2, 0),
-    "trn1": (1, 0.1),
-    "trn1_res": (1.33, 0.4),
-    "dir1": (2, 0.3),
-    "num1": (2.8, 0),
-    "num1_res": (3, 0.2),
-    "trn1_dir1": (1.4, 0.96),
-    "act1_trn1_dir1": (0.2, 1.5),
-    "act1_trn1_dir1_num1": (2.5, 1.8),
-
-    # right subtree
-    "act2": (5, 0),
-    "trn2": (6, 0),
-    "dir2": (5.9, 0.05),
-    "num2": (9, 0),
-    "act2": (5.2, 0),
-    "trn2": (6, 0.1),
-    "trn2_res": (6, 0.4),
-    "dir2": (7, 0.3),
-    "num2": (9.8, 0),
-    "num2_res": (9, 0.2),
-    "trn2_dir2": (6.4, 1),
-    "act2_trn2_dir2": (5.2, 1.5),
-    "act2_trn2_dir2_num2": (7.5, 1.8),
-
-    # merge
-    "conj_left": (3.5, 2.2),
-    "conj_right": (4.5, 3.2),
+    "verb2": (0.2, 0),
+    "ar_op2": (1, 0.1),
+    "dir2": (1.33, 0.4),
+    "num2": (2, 0.3),
+    "verb_res": (2.8, 0),
+    "dir_res": (3, 0.2),
+    "ar_op_res": (1.4, 0.96),
+    "num_res": (0.2, 1.5),
+    "conj_res": (2.5, 1.8),
 }
 
 
@@ -235,9 +223,9 @@ if __name__ == '__main__':
     total_len = sum([len(s) for s in data_splits])
 
     causal_model = CausalModel(variables, values, parents, functions, pos=pos)
-    #causal_model.print_structure()
-    #print("Timesteps:", causal_model.timesteps)
-    #quit()
+    causal_model.print_structure()
+    print("Timesteps:", causal_model.timesteps)
+    quit()
 
     accuracy = 0
     bar = tqdm(range(total_len))
