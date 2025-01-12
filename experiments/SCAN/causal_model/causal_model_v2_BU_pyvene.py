@@ -48,6 +48,41 @@ command_structure = {
     8: nums,  # 3
 }
 
+# util functions
+def rem_dups(l):
+    l_un = []
+    for item in l:
+        if l not in l_un:
+            l_un.append(item)
+    return l_un
+
+# https://stackoverflow.com/questions/10823877/what-is-the-fastest-way-to-flatten-arbitrarily-nested-lists-in-python
+def flatten(container):
+    for i in container:
+        if isinstance(i, (list, tuple)):
+            for j in flatten(i):
+                yield j
+        else:
+            yield i
+
+def add_empty_token(x):
+    command_str = x['commands']
+    command = command_str.split()
+    padded_command = []
+    index = 0
+    c = 0
+    while index < max_len:
+        expected_cs = command_structure[index]
+        if c < len(command) and command[c] in expected_cs:
+            padded_command.append(command[c])
+            c += 1
+        else:
+            padded_command.append(placeholder)
+        index += 1
+
+    x[input_column] = ' '.join(padded_command)
+    return x
+
 
 ### VARIABLES ###
 
@@ -89,24 +124,30 @@ def around_opposite_resolution(verb_res, ar_op1, ar_op2, dir_res):
             res_items.append([direction if i == 'direction' else verb for i in res_item])
     return res_items
 
-def resolve_num(ar_op_res, num1, num2):
+def num_resolution(ar_op_res, num1, num2):
     res_items = []
     # resolve num1
-    if num1 != placeholder: res_items.append(ar_op_res[0]*nums[num])
-    else: res_items.append(ar_op_res[0])
+    if num1 != placeholder:
+        res_items.append(ar_op_res[0]*nums[num1])
+    else:
+        res_items.append(ar_op_res[0])
     # resolve num2
-    if num2 != placeholder: res_items.append(ar_op_res[1]*nums[num])
-    else: res_items.append(ar_op_res[1])
+    if num2 != placeholder:
+        res_items.append(ar_op_res[1]*nums[num2])
+    else:
+        res_items.append(ar_op_res[1])
     return res_items
 
 def conj_resolution(num_res, conj):
     if conj == 'and':
         output =  num_res[0] + num_res[1]
-    elif conf == 'after':
+    elif conj == 'after':
         output = num_res[1] + num_res[0]
     else:
         output = num_res[0]
-    return output
+    # flatten?
+    output = [l for l in output if l != placeholder]
+    return ' '.join(output)
 
 
 functions = {
@@ -132,7 +173,7 @@ functions = {
     "ar_op_res": around_opposite_resolution,
 
     # resolve num
-    "num_res": resolve_num,
+    "num_res": num_resolution,
 
     # resolve conjugation
     "conj_res": conj_resolution,
@@ -156,25 +197,23 @@ values["conj"] = conjs
 
 # verb_res all values
 all_verbs = list(itertools.product(values["verb1"], values["verb2"]))
-# TODO: list of lists with duplicates -> how to remove duplicates. set() -> unhashable type
-all_verb_res = [verb_resolution(tup[0], tup[1]) for tup in all_verbs]
-values["verb_res"] = [verb_resolution(tup[0], tup[1]) for tup in all_verbs]
+values["verb_res"] = rem_dups([verb_resolution(tup[0], tup[1]) for tup in all_verbs])
 
 # direction resolution all values
 all_dirs = list(itertools.product(values["dir1"], values["dir2"]))
-values["dir_res"] = list(set(tuple([direction_resolution(tup[0], tup[1]) for tup in all_dirs])))
+values["dir_res"] = rem_dups([direction_resolution(tup[0], tup[1]) for tup in all_dirs])
 
 # around/opposite resolution all values
 all_ar_op = list(itertools.product(values["verb_res"], values["ar_op1"], values["ar_op2"], values["dir_res"]))
-values["ar_op_res"] = list(set(tuple([around_opposite_resolution(tup[0], tup[1], tup[2], tup[3]) for tup in all_ar_op])))
+values["ar_op_res"] = rem_dups([around_opposite_resolution(tup[0], tup[1], tup[2], tup[3]) for tup in all_ar_op])
 
 # num resolution all values
 all_nums = list(itertools.product(values["ar_op_res"], values["num1"], values["num2"]))
-values["num_res"] = list(set(tuple([num_resolution(tup[0], tup[1], tup[2]) for tup in all_nums])))
+values["num_res"] = rem_dups([num_resolution(tup[0], tup[1], tup[2]) for tup in all_nums])
 
 # conj resolution all values
 all_conj = list(itertools.product(values["num_res"], values["conj"]))
-values["conj_res"] = list(set(tuple([conj_resolution(tup[0], tup[1]) for tup in all_conj])))
+values["conj_res"] = list(set([conj_resolution(tup[0], tup[1]) for tup in all_conj]))
 
 
 ### PARENTS ###
@@ -192,20 +231,20 @@ parents["conj_res"] = ["num_res", "conj"]
 
 # a dictionary with nodes as keys and positions as values
 pos = {
-    "verb1": (1, 0),
-    "ar_op1": (2, 0),
-    "dir1": (1.9, 0.05),
-    "num1": (4, 0),
-    "conj": (4.11, 0.1),
-    "verb2": (0.2, 0),
-    "ar_op2": (1, 0.1),
-    "dir2": (1.33, 0.4),
-    "num2": (2, 0.3),
-    "verb_res": (2.8, 0),
-    "dir_res": (3, 0.2),
-    "ar_op_res": (1.4, 0.96),
-    "num_res": (0.2, 1.5),
-    "conj_res": (2.5, 1.8),
+    "verb1": (0.5, 0),
+    "ar_op1": (1, 0),
+    "dir1": (1.5, 0),
+    "num1": (2, 0),
+    "conj": (2.5, 0),
+    "verb2": (3, 0),
+    "ar_op2": (3.5, 0),
+    "dir2": (4, 0),
+    "num2": (4.5, 0),
+    "verb_res": (1, 1),
+    "dir_res": (3, 1),
+    "ar_op_res": (2, 2),
+    "num_res": (2.5, 3),
+    "conj_res": (3, 4),
 }
 
 
@@ -220,40 +259,45 @@ if __name__ == '__main__':
     length_test = scan_length['test']
 
     data_splits = [simple_train, simple_test, length_train, length_test]
-    total_len = sum([len(s) for s in data_splits])
 
     causal_model = CausalModel(variables, values, parents, functions, pos=pos)
-    causal_model.print_structure()
-    print("Timesteps:", causal_model.timesteps)
-    quit()
+    #causal_model.print_structure()
+    #print("Timesteps:", causal_model.timesteps)
+    #quit()
+
+    # filter out turns
+    datasets = []
+    for dataset in data_splits:
+        dataset = dataset.filter(lambda x: 'turn' not in x["commands"].split())
+        datasets.append(dataset)
+    total_len = sum([len(d) for d in datasets])
 
     accuracy = 0
     bar = tqdm(range(total_len))
-    for dataset in data_splits:
-        for x in dataset:
-            command_str = x['commands']
-            label = x['actions']
-            
-            command = command_str.split()
-            padded_command = []
-            index = 0
-            c = 0
-            while index < max_len:
-                expected_cs = command_structure[index]
-                if c < len(command) and command[c] in expected_cs:
-                    padded_command.append(command[c])
-                    c += 1
-                else:
-                    padded_command.append(EMPTY)
-                index += 1
+    for dataset in datasets:
+        column_names = dataset.column_names
+        input_column = column_names[0]
 
-            causal_model_inputs = {leaves[i]:padded_command[i] for i in range(max_len)}
+        # pad with placeholder
+        dataset = dataset.map(
+            add_empty_token,
+            batched=False,
+            # desc="Running tokenizer on dataset",
+        )
+        for x in dataset:
+            label = x['actions']
+            command_str = x['commands']
+            command = command_str.split()
+            causal_model_inputs = {leaves[i]:command[i] for i in range(max_len)}
             setting = causal_model.run_forward(causal_model_inputs)
-            if label==setting['conj_right']:
+            #print(setting['conj_res'])
+            #print(label)
+            #quit()
+            if label==setting['conj_res']:
                 accuracy += 1
             else:
                 print(command_str)
-                print(setting)
+                print(setting['conj_res'])
                 quit()
             bar.update(1)
 
