@@ -15,6 +15,7 @@ from tqdm.auto import tqdm
 # Longest command is 9 words : https://arxiv.org/pdf/1711.00350
 max_len = 9
 placeholder = '<empty>'
+
 verbs = {
     'jump': 'I_JUMP',
     'look': 'I_LOOK',

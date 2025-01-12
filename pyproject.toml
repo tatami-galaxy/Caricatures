@@ -7,7 +7,10 @@ requires-python = ">=3.12"
 dependencies = [
     "datasets>=3.2.0",
     "evaluate>=0.4.3",
+    "jupyter>=1.1.1",
+    "lab>=8.3",
     "nnsight>=0.3.7",
+    "notebook>=7.3.2",
     "tensorboard>=2.18.0",
     "torch>=2.5.1",
     "torchvision>=0.20.1",
