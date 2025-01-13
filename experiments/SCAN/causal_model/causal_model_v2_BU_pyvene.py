@@ -12,44 +12,7 @@ from tqdm.auto import tqdm
 # 5. Resolve C: Identify and interpret and/after.
 
 
-# Longest command is 9 words : https://arxiv.org/pdf/1711.00350
-max_len = 9
-placeholder = '<empty>'
-
-verbs = {
-    'jump': 'I_JUMP',
-    'look': 'I_LOOK',
-    'walk': 'I_WALK',
-    'run': 'I_RUN'
-}
-directions = {
-    'left': 'I_TURN_LEFT',
-    'right': 'I_TURN_RIGHT',
-}
-around_opposite = {
-    'around': ['direction', 'action']*4,
-    'opposite': ['direction', 'direction', 'action'],
-}
-nums = {
-    'twice': 2,
-    'thrice': 3,
-}
-conjs = ['and', 'after']
-
-# command structure
-command_structure = {
-    0: verbs,
-    1: around_opposite,
-    2: directions,
-    3: nums,
-    4: conjs,
-    5: verbs,  # 0
-    6: around_opposite,  # 1
-    7: directions,  # 2
-    8: nums,  # 3
-}
-
-# util functions
+# utility functions
 def rem_dups(l):
     l_un = []
     for item in l:
@@ -72,7 +35,7 @@ def add_empty_token(x):
     padded_command = []
     index = 0
     c = 0
-    while index < max_len:
+    while index < MAX_COMMAND_LEN:
         expected_cs = command_structure[index]
         if c < len(command) and command[c] in expected_cs:
             padded_command.append(command[c])
@@ -85,27 +48,65 @@ def add_empty_token(x):
     return x
 
 
+# Longest command is 9 words : https://arxiv.org/pdf/1711.00350
+MAX_COMMAND_LEN = 9
+placeholder = '<empty>'
+
+VERBS = {
+    'jump': 'I_JUMP',
+    'look': 'I_LOOK',
+    'walk': 'I_WALK',
+    'run': 'I_RUN'
+}
+DIRECTIONS = {
+    'left': 'I_TURN_LEFT',
+    'right': 'I_TURN_RIGHT',
+}
+AROUND_OPPOSITE = {
+    'around': ['direction', 'action']*4,
+    'opposite': ['direction', 'direction', 'action'],
+}
+NUMS = {
+    'twice': 2,
+    'thrice': 3,
+}
+CONJS = ['and', 'after']
+
+# command structure
+command_structure = {
+    0: VERBS,
+    1: AROUND_OPPOSITE,
+    2: DIRECTIONS,
+    3: NUMS,
+    4: CONJS,
+    5: VERBS,  # 0
+    6: AROUND_OPPOSITE,  # 1
+    7: DIRECTIONS,  # 2
+    8: NUMS,  # 3
+}
+
+
 ### VARIABLES ###
 
-leaves = [
+LEAVES = [
     "verb1", "ar_op1", "dir1", "num1",
     "conj",
     "verb2", "ar_op2", "dir2", "num2"
 ]
-non_leaves = ["verb_res", "dir_res", "ar_op_res", "num_res", "conj_res"]
-variables = leaves + non_leaves
+NON_LEAVES = ["verb_res", "dir_res", "ar_op_res", "num_res", "conj_res"]
+VARIABLES = LEAVES + NON_LEAVES
 
 
 ### FUNCTIONS ###
 
 def verb_resolution(verb1, verb2):
-    verb1 = verbs[verb1] if verb1 in verbs else verb1
-    verb2 = verbs[verb2] if verb2 in verbs else verb2
+    verb1 = VERBS[verb1] if verb1 in VERBS else verb1
+    verb2 = VERBS[verb2] if verb2 in VERBS else verb2
     return [verb1, verb2]
 
 def direction_resolution(dir1, dir2):
-    dir1 = directions[dir1] if dir1 in directions else dir1
-    dir2 = directions[dir2] if dir2 in directions else dir2
+    dir1 = DIRECTIONS[dir1] if dir1 in DIRECTIONS else dir1
+    dir2 = DIRECTIONS[dir2] if dir2 in DIRECTIONS else dir2
     return [dir1, dir2]
 
 def around_opposite_resolution(verb_res, ar_op1, ar_op2, dir_res):
@@ -121,7 +122,7 @@ def around_opposite_resolution(verb_res, ar_op1, ar_op2, dir_res):
         if ar_op == placeholder:
             res_items.append([direction, verb])
         else:
-            res_item = around_opposite[ar_op]
+            res_item = AROUND_OPPOSITE[ar_op]
             res_items.append([direction if i == 'direction' else verb for i in res_item])
     return res_items
 
@@ -129,12 +130,12 @@ def num_resolution(ar_op_res, num1, num2):
     res_items = []
     # resolve num1
     if num1 != placeholder:
-        res_items.append(ar_op_res[0]*nums[num1])
+        res_items.append(ar_op_res[0]*NUMS[num1])
     else:
         res_items.append(ar_op_res[0])
     # resolve num2
     if num2 != placeholder:
-        res_items.append(ar_op_res[1]*nums[num2])
+        res_items.append(ar_op_res[1]*NUMS[num2])
     else:
         res_items.append(ar_op_res[1])
     return res_items
@@ -151,7 +152,7 @@ def conj_resolution(num_res, conj):
     return ' '.join(output)
 
 
-functions = {
+FUNCTIONS = {
 
     # leaves
     "verb1": lambda x: x, 
@@ -183,55 +184,55 @@ functions = {
 
 ### VALUES (output) ###
 
-values = dict()
+VALUES = dict()
 
 # leaves all values
-values["verb1"] = list(verbs.keys())
-values["verb2"] = list(verbs.keys())
-values["ar_op1"] = list(around_opposite.keys())
-values["ar_op2"] = list(around_opposite.keys())
-values["dir1"] = list(directions.keys())
-values["dir2"] = list(directions.keys())
-values["num1"] = list(nums.keys())
-values["num2"] = list(nums.keys())
-values["conj"] = conjs
+VALUES["verb1"] = list(VERBS.keys())
+VALUES["verb2"] = list(VERBS.keys())
+VALUES["ar_op1"] = list(AROUND_OPPOSITE.keys())
+VALUES["ar_op2"] = list(AROUND_OPPOSITE.keys())
+VALUES["dir1"] = list(DIRECTIONS.keys())
+VALUES["dir2"] = list(DIRECTIONS.keys())
+VALUES["num1"] = list(NUMS.keys())
+VALUES["num2"] = list(NUMS.keys())
+VALUES["conj"] = CONJS
 
 # verb_res all values
-all_verbs = list(itertools.product(values["verb1"], values["verb2"]))
-values["verb_res"] = rem_dups([verb_resolution(tup[0], tup[1]) for tup in all_verbs])
+all_verbs = list(itertools.product(VALUES["verb1"], VALUES["verb2"]))
+VALUES["verb_res"] = rem_dups([verb_resolution(tup[0], tup[1]) for tup in all_verbs])
 
 # direction resolution all values
-all_dirs = list(itertools.product(values["dir1"], values["dir2"]))
-values["dir_res"] = rem_dups([direction_resolution(tup[0], tup[1]) for tup in all_dirs])
+all_dirs = list(itertools.product(VALUES["dir1"], VALUES["dir2"]))
+VALUES["dir_res"] = rem_dups([direction_resolution(tup[0], tup[1]) for tup in all_dirs])
 
 # around/opposite resolution all values
-all_ar_op = list(itertools.product(values["verb_res"], values["ar_op1"], values["ar_op2"], values["dir_res"]))
-values["ar_op_res"] = rem_dups([around_opposite_resolution(tup[0], tup[1], tup[2], tup[3]) for tup in all_ar_op])
+all_ar_op = list(itertools.product(VALUES["verb_res"], VALUES["ar_op1"], VALUES["ar_op2"], VALUES["dir_res"]))
+VALUES["ar_op_res"] = rem_dups([around_opposite_resolution(tup[0], tup[1], tup[2], tup[3]) for tup in all_ar_op])
 
 # num resolution all values
-all_nums = list(itertools.product(values["ar_op_res"], values["num1"], values["num2"]))
-values["num_res"] = rem_dups([num_resolution(tup[0], tup[1], tup[2]) for tup in all_nums])
+all_nums = list(itertools.product(VALUES["ar_op_res"], VALUES["num1"], VALUES["num2"]))
+VALUES["num_res"] = rem_dups([num_resolution(tup[0], tup[1], tup[2]) for tup in all_nums])
 
 # conj resolution all values
-all_conj = list(itertools.product(values["num_res"], values["conj"]))
-values["conj_res"] = list(set([conj_resolution(tup[0], tup[1]) for tup in all_conj]))
+all_conj = list(itertools.product(VALUES["num_res"], VALUES["conj"]))
+VALUES["conj_res"] = list(set([conj_resolution(tup[0], tup[1]) for tup in all_conj]))
 
 
 ### PARENTS ###
 
-parents = {v:[] for v in variables}
+PARENTS = {v:[] for v in VARIABLES}
 
-parents["verb_res"] = ["verb1", "verb2"]
-parents["dir_res"] = ["dir1", "dir2"]
-parents["ar_op_res"] = ["verb_res", "ar_op1", "ar_op2", "dir_res"]
-parents["num_res"] = ["ar_op_res", "num1", "num2"]
-parents["conj_res"] = ["num_res", "conj"]
+PARENTS["verb_res"] = ["verb1", "verb2"]
+PARENTS["dir_res"] = ["dir1", "dir2"]
+PARENTS["ar_op_res"] = ["verb_res", "ar_op1", "ar_op2", "dir_res"]
+PARENTS["num_res"] = ["ar_op_res", "num1", "num2"]
+PARENTS["conj_res"] = ["num_res", "conj"]
 
 
 ### POSITIONS ###
 
 # a dictionary with nodes as keys and positions as values
-pos = {
+POS = {
     "verb1": (0.5, 0),
     "ar_op1": (1, 0),
     "dir1": (1.5, 0),
@@ -261,7 +262,7 @@ if __name__ == '__main__':
 
     data_splits = [simple_train, simple_test, length_train, length_test]
 
-    causal_model = CausalModel(variables, values, parents, functions, pos=pos)
+    causal_model = CausalModel(VARIABLES, VALUES, PARENTS, FUNCTIONS, pos=POS)
     #causal_model.print_structure()
     #print("Timesteps:", causal_model.timesteps)
     #quit()
@@ -289,7 +290,7 @@ if __name__ == '__main__':
             label = x['actions']
             command_str = x['commands']
             command = command_str.split()
-            causal_model_inputs = {leaves[i]:command[i] for i in range(max_len)}
+            causal_model_inputs = {LEAVES[i]:command[i] for i in range(MAX_COMMAND_LEN)}
             setting = causal_model.run_forward(causal_model_inputs)
             #print(setting['conj_res'])
             #print(label)
